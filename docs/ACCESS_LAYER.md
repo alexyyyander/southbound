@@ -124,6 +124,22 @@ Agent 先读 catalog 或 `iot_devices_list`，再用 `iot_call` 执行。
 
 失败不会静默：策略拒绝、参数错误、adapter 不可用都会返回结构化错误，并带 `requires_confirmation` 标记（如果适用）。
 
+## 3.1 运行时与事件流
+
+`SouthboundRuntime`（`southbound/runtime.py`）组合了模拟器、`AccessHub`、审计和 `EventBus`：
+
+- **northbound**：`intent(goal)` 把目标拆成动作；`call(device_id, capability)` 执行单个能力。
+- **southbound**：`AccessHub` 选择 adapter 并执行。
+- **事件**：
+  - `intent`：`plane=northbound`, `direction=in`
+  - `command`：`plane=southbound`, `direction=down`
+  - `state`：`plane=northbound`, `direction=up`
+  - `intent.result`：`plane=northbound`, `direction=out`
+- **SSE**：`GET /api/events` 实时推送；`GET /api/events/recent?since=<id>` 支持重放。
+- **Dashboard**：顶部 flowbar 按 `plane` 在 Agent—Southbound 与 Southbound—Devices 两段上打点，显示最新事件和计数。
+
+运行时是进程内的：Dashboard、CLI、MCP 各自嵌入一个。需要多客户端共享状态时，可把同一组 HTTP 端点独立成 service，adapter 和策略代码不变。
+
 ## 4. 策略
 
 配置在 `policy` 段：
@@ -225,6 +241,8 @@ cp config/access.example.json config/access.local.json
 ### CLI
 
 ```bash
+python3 -m southbound intent "打开客厅灯并关掉书房插座"
+python3 -m southbound serve
 python3 -m southbound tools
 python3 -m southbound call living_light set_brightness --args '{"brightness": 30}'
 python3 -m southbound access
@@ -240,13 +258,18 @@ python3 -m southbound call ha:lock.front_door unlock --confirm
 
 ### HTTP（dashboard）
 
-- `GET /api/access/status`
-- `GET /api/access/devices`
-- `GET /api/access/catalog`
+- `GET /api/northbound/status`
+- `GET /api/northbound/devices`
+- `GET /api/northbound/catalog`
+- `POST /api/northbound/intent`
+- `POST /api/northbound/call`
+- `GET /api/events`（SSE）
+- `GET /api/events/recent?since=<id>`
+- `GET /api/access/status` 等旧路径保留为别名
 - `GET /api/access/audit`
 - `POST /api/access/call`
 
-面板的模拟端点操作和 agent 控制台动作都经 `AccessHub`，因此会经过策略和审计。
+面板的模拟端点操作和 agent 控制台动作都经 `SouthboundRuntime` → `AccessHub`，因此会经过策略、审计并产生事件。
 
 ## 8. 扩展一个新 adapter
 
@@ -308,6 +331,7 @@ class MyAdapter(DeviceAdapter):
 - 审计日志；
 - 模拟器、Home Assistant、MQTT、Zigbee2MQTT 四类 adapter；
 - MCP、CLI、HTTP 三种入口；
+- SouthboundRuntime、EventBus、SSE 事件流与面板 flowbar；
 - 无硬件闭环与可视化；
 - 测试覆盖核心路径。
 
@@ -315,12 +339,13 @@ class MyAdapter(DeviceAdapter):
 
 - Matter 原生 controller（目前经 HA）；
 - ESPHome 原生 protobuf API（目前经 HA/MQTT）；
-- 事件订阅（目前读状态为主，MQTT 已缓存但未做事件流）；
+- 设备侧事件订阅（MQTT 已缓存 state，但尚未做完整事件流）；
+- 运行时独立 service / 多客户端共享状态；
 - 设备自动发现到 adapter 配置的自动生成；
 - 多用户认证、远端 TLS、权限模型；
 - 真实硬件上的延迟与可靠性数据。
 
-结论：作为 **IoT 全智能 agent 的接入工具层骨架**，它是完整的；作为**生产级控制系统**，还缺事件流、认证和高风险设备的现场验证。
+结论：作为 **IoT 全智能 agent 的接入工具层骨架**，它是完整的；作为**生产级控制系统**，还缺设备侧事件流、运行时服务和现场验证。
 
 ## 11. 下一步
 

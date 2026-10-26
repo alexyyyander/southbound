@@ -5,7 +5,8 @@ southbound discover --sweep
 southbound scan --sweep
 southbound scan --hosts 192.168.1.2,192.168.1.20 --full
 southbound agent "哪些设备能跑 agent"
-southbound sim "打开客厅灯并关掉书房插座"
+southbound intent "打开客厅灯并关掉书房插座"
+southbound serve
 southbound demo
 southbound mcp
 """
@@ -19,10 +20,8 @@ from pathlib import Path
 
 from . import agent as agent_module
 from . import deep_scan, discover, mcp_server, viz_server
-from .access import build_hub
 from .access.errors import AccessError
-from .sim_agent import run_goal
-from .simulator import Simulator
+from .runtime import SouthboundRuntime
 
 
 def cmd_discover(args: argparse.Namespace) -> int:
@@ -71,8 +70,8 @@ def cmd_agent(args: argparse.Namespace) -> int:
 
 def cmd_sim(args: argparse.Namespace) -> int:
     goal = " ".join(args.goal).strip() or "家里状态"
-    simulator = Simulator()
-    result = run_goal(goal, simulator)
+    runtime = SouthboundRuntime()
+    result = runtime.intent(goal)
     if args.json:
         print(json.dumps(result, ensure_ascii=False, indent=2))
         return 0
@@ -80,7 +79,15 @@ def cmd_sim(args: argparse.Namespace) -> int:
     for step in result["steps"]:
         print(f"{step['n']}. {step['title']}：{step['detail']}")
     print(f"\n结果：{result['summary']}")
+    print(
+        f"事件：{runtime.events.count()} 条 "
+        f"(northbound intent → southbound command → northbound state)"
+    )
     return 0 if result["ok"] else 1
+
+
+def cmd_intent(args: argparse.Namespace) -> int:
+    return cmd_sim(args)
 
 
 def cmd_demo(args: argparse.Namespace) -> int:
@@ -94,8 +101,8 @@ def cmd_mcp(_args: argparse.Namespace) -> int:
 
 
 def cmd_tools(args: argparse.Namespace) -> int:
-    hub = build_hub()
-    catalog = hub.catalog()
+    runtime = SouthboundRuntime()
+    catalog = runtime.catalog()
     if args.json:
         print(json.dumps({"tools": catalog}, ensure_ascii=False, indent=2))
         return 0
@@ -110,14 +117,14 @@ def cmd_tools(args: argparse.Namespace) -> int:
 
 
 def cmd_call(args: argparse.Namespace) -> int:
-    hub = build_hub()
+    runtime = SouthboundRuntime()
     try:
         arguments = json.loads(args.arguments) if args.arguments else {}
     except json.JSONDecodeError as exc:
         print(f"invalid --args JSON: {exc}", file=sys.stderr)
         return 2
     try:
-        result = hub.call(
+        result = runtime.call(
             args.device_id,
             args.capability,
             arguments,
@@ -143,8 +150,8 @@ def cmd_call(args: argparse.Namespace) -> int:
 
 
 def cmd_access(_args: argparse.Namespace) -> int:
-    hub = build_hub()
-    print(json.dumps(hub.status(), ensure_ascii=False, indent=2))
+    runtime = SouthboundRuntime()
+    print(json.dumps(runtime.status(), ensure_ascii=False, indent=2))
     return 0
 
 
@@ -153,11 +160,13 @@ def cmd_info(_args: argparse.Namespace) -> int:
     print("  discover  ARP / SSDP / mDNS 发现与分级")
     print("  scan      端口扫描与服务指纹")
     print("  agent     基于 inventory 的目标问答")
-    print("  sim       六设备模拟器 + 确定性 agent 循环")
+    print("  intent    northbound 目标 → southbound 动作")
+    print("  serve     启动 Southbound runtime + 可视化面板")
+    print("  sim       intent 的兼容别名")
     print("  tools     接入工具层的能力目录")
     print("  call      通过策略与审计层执行设备能力")
-    print("  access    适配器、策略与审计状态")
-    print("  demo      本地可视化面板")
+    print("  access    适配器、策略、审计与事件状态")
+    print("  demo      可视化面板（serve 的别名）")
     print("  mcp       stdio MCP server")
     print("\n文档：README.md、docs/ARCHITECTURE.md、docs/ACCESS_LAYER.md")
     return 0
@@ -196,6 +205,17 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("goal", nargs="*")
     p.add_argument("--json", action="store_true")
     p.set_defaults(func=cmd_sim)
+
+    p = sub.add_parser("intent", help="northbound goal -> southbound actions")
+    p.add_argument("goal", nargs="*")
+    p.add_argument("--json", action="store_true")
+    p.set_defaults(func=cmd_intent)
+
+    p = sub.add_parser("serve", help="run Southbound runtime + dashboard")
+    p.add_argument("--host", default="127.0.0.1")
+    p.add_argument("--port", type=int, default=8765)
+    p.add_argument("--open", action="store_true")
+    p.set_defaults(func=cmd_demo)
 
     p = sub.add_parser("demo", help="serve the visual dashboard")
     p.add_argument("--host", default="127.0.0.1")

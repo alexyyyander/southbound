@@ -99,7 +99,7 @@ def _parse_oui_csv(path: Path) -> dict[str, str]:
 def _download_oui(path: Path) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp = path.with_suffix(".tmp")
-    req = urllib.request.Request(OUI_URL, headers={"User-Agent": "southbound/0.4"})
+    req = urllib.request.Request(OUI_URL, headers={"User-Agent": "southbound/0.5"})
     with urllib.request.urlopen(req, timeout=12) as resp, tmp.open("wb") as out:
         while True:
             chunk = resp.read(1024 * 256)

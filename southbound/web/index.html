@@ -21,6 +21,27 @@
       </div>
     </header>
 
+    <section class="flowbar" aria-label="Northbound 与 Southbound 实时流">
+      <div class="flowbar__node">
+        <strong>Agent</strong>
+        <span>northbound API</span>
+      </div>
+      <div class="flowbar__track" data-track="north"><i></i></div>
+      <div class="flowbar__node flowbar__node--hub">
+        <strong>Southbound</strong>
+        <span>intent · policy · audit · adapters</span>
+      </div>
+      <div class="flowbar__track" data-track="south"><i></i></div>
+      <div class="flowbar__node">
+        <strong>Devices</strong>
+        <span>Wi-Fi / Zigbee / Matter</span>
+      </div>
+      <div class="flowbar__last">
+        <span id="flow-last">等待第一个意图</span>
+        <span id="flow-count">0 events</span>
+      </div>
+    </section>
+
     <main class="layout">
       <aside class="rail panel" aria-label="图例与网络信息">
         <section class="rail__block">

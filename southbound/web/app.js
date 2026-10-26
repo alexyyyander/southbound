@@ -12,6 +12,7 @@
     sim: [],
     access: null,
     catalog: null,
+    eventCount: 0,
     tier: "all",
     query: "",
     selectedKey: null,
@@ -563,7 +564,7 @@
     button.textContent = "执行中…";
     trace.innerHTML = '<p class="trace__empty">正在规划并调用工具…</p>';
     try {
-      const result = await api("/api/agent", {
+      const result = await api("/api/northbound/intent", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ goal }),
@@ -687,9 +688,77 @@
     });
   }
 
+  function shorten(text, limit = 42) {
+    const value = String(text || "");
+    return value.length > limit ? `${value.slice(0, limit - 1)}…` : value;
+  }
+
+  function flowLabel(event) {
+    switch (event.type) {
+      case "intent":
+        return `northbound · intent · ${shorten(event.goal)}`;
+      case "intent.result":
+        return `northbound · result · ${shorten(event.summary)}`;
+      case "command":
+        return `southbound · ${shorten(event.name || event.device_id, 18)} · ${
+          event.capability
+        } ${event.ok ? "✓" : "✗"}`;
+      case "state":
+        return `northbound · state · ${shorten(event.name || event.device_id, 18)} · ${
+          event.capability
+        }`;
+      case "reset":
+        return "southbound · simulator reset";
+      default:
+        return `${event.plane || ""} · ${event.type || "event"}`;
+    }
+  }
+
+  function renderFlowEvent(event, animate) {
+    if (event.id) state.eventCount = Math.max(state.eventCount, event.id);
+    else state.eventCount += 1;
+    $("#flow-last").textContent = flowLabel(event);
+    $("#flow-last").title = flowLabel(event);
+    $("#flow-count").textContent = `${state.eventCount} events`;
+    if (!animate) return;
+    const plane = event.plane === "southbound" ? "south" : "north";
+    const track = document.querySelector(
+      `.flowbar__track[data-track="${plane}"]`
+    );
+    if (!track) return;
+    track.classList.remove("is-active", "is-reverse");
+    if (event.direction === "up" || event.direction === "out") {
+      track.classList.add("is-reverse");
+    }
+    void track.offsetWidth;
+    track.classList.add("is-active");
+    window.setTimeout(() => {
+      track.classList.remove("is-active", "is-reverse");
+    }, 800);
+  }
+
+  function initEvents() {
+    api("/api/events/recent?limit=1")
+      .then((data) => {
+        const events = data.events || [];
+        if (events.length) renderFlowEvent(events[events.length - 1], false);
+      })
+      .catch(() => {});
+    if (!window.EventSource) return;
+    const source = new EventSource("/api/events");
+    source.onmessage = (message) => {
+      try {
+        renderFlowEvent(JSON.parse(message.data), true);
+      } catch (_) {
+        /* ignore malformed SSE frames */
+      }
+    };
+  }
+
   async function init() {
     bindEvents();
     renderSuggestions();
+    initEvents();
     try {
       const [inventory, deep, sim, access, catalog] = await Promise.all([
         api("/api/inventory").catch(() => ({})),

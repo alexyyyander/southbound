@@ -6,6 +6,29 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-10-26
+
+### Added
+
+- **SouthboundRuntime** (`southbound/runtime.py`): one object owning the
+  simulator, `AccessHub`, audit log, and a thread-safe `EventBus`.
+- **Northbound API**: `POST /api/northbound/intent`, `/call`, and
+  `GET /api/northbound/status|devices|catalog`; `/api/agent` remains an
+  alias.
+- **Live event stream**: `GET /api/events` (SSE) and
+  `GET /api/events/recent?since=` for replay; events carry `plane`
+  (`northbound`/`southbound`) and `direction`.
+- **Dashboard flowbar**: animated Agent → Southbound → Devices flow with
+  live intent/command/state labels and event count.
+- **CLI**: `southbound intent` and `southbound serve`; `sim` remains an
+  alias of intent. All CLI and MCP actions now route through the runtime.
+- Tests: runtime/event-bus coverage (40 tests total).
+
+### Changed
+
+- MCP `sim_action` / `sim_goal` and `iot_call` now use the shared runtime,
+  so every demo action is policy-checked, audited, and emitted as an event.
+
 ## [0.4.0] - 2026-10-26
 
 ### Added

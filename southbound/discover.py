@@ -194,7 +194,7 @@ def _parse_ssdp(data: bytes) -> dict[str, str]:
 
 def _fetch_upnp(location: str, timeout: float = 1.8) -> dict:
     try:
-        req = urllib.request.Request(location, headers={"User-Agent": "southbound/0.4"})
+        req = urllib.request.Request(location, headers={"User-Agent": "southbound/0.5"})
         with urllib.request.urlopen(req, timeout=timeout) as resp:
             raw = resp.read(256 * 1024)
         root = ET.fromstring(raw)

@@ -20,7 +20,7 @@ python3 -m southbound discover --sweep
 ```
 
 ```bash
-python3 -m southbound sim "打开客厅灯并关掉书房插座"
+python3 -m southbound intent "打开客厅灯并关掉书房插座"
 ```
 
 ```bash
@@ -32,7 +32,7 @@ python3 -m southbound call living_light set_brightness --args '{"brightness": 30
 ```
 
 ```bash
-python3 -m southbound demo
+python3 -m southbound serve
 ```
 
 面板默认在 `http://127.0.0.1:8765/`。无需安装依赖，Python 3.10+ 即可；也可以：
@@ -65,6 +65,18 @@ iot_call(device_id, capability, arguments, confirm)
 5. 写入审计日志；
 6. 返回结构化状态。
 
+`SouthboundRuntime` 把 `AccessHub`、模拟器、审计和事件总线组合成一个运行时：
+
+- **northbound**：`intent(goal)` 和 `call(device, capability, args)`；
+- **southbound**：adapter → 真实设备/模拟设备；
+- 每个动作发出 `command`（southbound）与 `state`（northbound）事件；
+- 面板通过 SSE `/api/events` 实时看到流向。
+
+```bash
+python3 -m southbound intent "打开客厅灯" --json
+python3 -m southbound serve
+```
+
 示例：
 
 ```bash
@@ -91,8 +103,9 @@ export HA_TOKEN="..."
 
 ## 可视化面板
 
-`python3 -m southbound demo` 启动只绑定 `127.0.0.1` 的本地服务：
+`python3 -m southbound serve` 启动只绑定 `127.0.0.1` 的本地服务：
 
+- **Northbound / Southbound 流**：页面顶部实时显示 Agent → Southbound → Devices 的方向、最新事件和计数。
 - **网络拓扑**：网关、AP、NAS、打印机、ESP32、Mac 与终端集群，按 T0–T3 着色；点击节点筛选设备。
 - **设备清单**：49 台实测设备的搜索、档位过滤、端口与详情。
 - **模拟端点**：灯、插座、温湿度、窗帘、门磁、净化器；操作经 `AccessHub` 走策略与审计。
@@ -111,11 +124,14 @@ export HA_TOKEN="..."
 | `southbound scan --sweep` | 端口扫描（大网段建议 `--hosts` 定向） |
 | `southbound scan --hosts 192.168.1.2,192.168.1.20 --full` | 只扫关键设备 |
 | `southbound agent "哪些设备能跑 agent"` | 基于 inventory 的问答与接入方案 |
-| `southbound sim "打开客厅灯"` | 对模拟端点执行目标并打印 trace |
+| `southbound intent "打开客厅灯"` | northbound intent → southbound 动作 + trace |
+| `southbound serve` | 启动 Southbound runtime + 可视化面板 |
+| `southbound sim "打开客厅灯"` | intent 的兼容别名 |
 | `southbound tools` | 接入层能力目录 |
 | `southbound call <device> <capability>` | 通过策略与审计执行能力 |
-| `southbound access` | 适配器、策略与审计状态 |
-| `southbound demo` | 启动可视化面板 |
+| `southbound access` | 适配器、策略、审计与运行时状态 |
+| `southbound serve` | 启动运行时与可视化面板 |
+| `southbound demo` | `serve` 的别名 |
 | `southbound mcp` | 启动 stdio MCP server |
 | `southbound info` | 工具链地图 |
 
@@ -125,6 +141,7 @@ export HA_TOKEN="..."
 southbound/
 ├── southbound/
 │   ├── cli.py               # 统一 CLI
+│   ├── runtime.py           # SouthboundRuntime + EventBus + SSE 事件
 │   ├── discover.py          # ARP / mDNS / SSDP
 │   ├── deep_scan.py         # 端口与服务指纹
 │   ├── registry.py          # OUI 与 T0–T3
@@ -199,7 +216,7 @@ claude mcp add --scope project southbound -- python3 /path/to/southbound/mcp_ser
 make test
 ```
 
-当前 35 项标准库测试覆盖分级规则、模拟器、agent 目标拆分、能力校验、策略、审计、工具目录、HA 适配器映射、MQTT payload 和 CLI 解析。
+当前 40 项标准库测试覆盖分级规则、模拟器、agent 目标拆分、能力校验、策略、审计、工具目录、运行时/事件总线、HA 适配器映射、MQTT payload 和 CLI 解析。
 
 ## 文档
 

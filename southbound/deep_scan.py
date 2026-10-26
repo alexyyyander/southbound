@@ -204,7 +204,7 @@ def http_probe(ip: str, port: int, tls: bool = False) -> dict:
             "GET",
             "/",
             headers={
-                "User-Agent": "southbound/0.4",
+                "User-Agent": "southbound/0.5",
                 "Accept": "text/html,*/*",
             },
         )
@@ -311,7 +311,7 @@ def exposures(host: dict) -> list[str]:
 
 
 def rtsp_probe(ip: str) -> dict:
-    request = f"OPTIONS rtsp://{ip}/ RTSP/1.0\r\nCSeq: 1\r\nUser-Agent: southbound/0.4\r\n\r\n"
+    request = f"OPTIONS rtsp://{ip}/ RTSP/1.0\r\nCSeq: 1\r\nUser-Agent: southbound/0.5\r\n\r\n"
     try:
         with socket.create_connection((ip, 554), timeout=2.0) as sock:
             sock.settimeout(2.0)

@@ -33,18 +33,17 @@ import sys
 
 from . import agent
 from . import deep_scan as deep
-from .access import build_hub
 from .access.errors import AccessError
 from .deep_scan import DEFAULT_OUT as DEEP_OUT
 from .discover import DEFAULT_OUT, discover, print_inventory
-from .sim_agent import run_goal as run_sim_goal
-from .simulator import Simulator
+from .runtime import SouthboundRuntime
 
-SIM = Simulator()
-HUB = build_hub(simulator=SIM)
+RUNTIME = SouthboundRuntime()
+SIM = RUNTIME.simulator
+HUB = RUNTIME.hub
 
 SERVER_NAME = "southbound"
-SERVER_VERSION = "0.4.0"
+SERVER_VERSION = "0.5.0"
 DEFAULT_PROTOCOL = "2024-11-05"
 
 TOOLS = [
@@ -325,32 +324,42 @@ def _tool_sim_action(arguments: dict) -> dict:
     device_id = str(arguments.get("device_id", ""))
     action = str(arguments.get("action", ""))
     value = arguments.get("value")
+    call_arguments = {}
+    if action == "set_brightness":
+        call_arguments = {"brightness": value}
+    elif action == "set_position":
+        call_arguments = {"position": value}
+    elif action == "set_mode":
+        call_arguments = {"mode": value}
     try:
-        device = SIM.act(device_id, action, value)
-    except (KeyError, ValueError) as exc:
+        RUNTIME.call(device_id, action, call_arguments)
+        device = SIM.get_device(device_id)
+    except (AccessError, KeyError, ValueError) as exc:
         return _text_result(str(exc), is_error=True)
     return _text_result(json.dumps(device, ensure_ascii=False, indent=2))
 
 
 def _tool_sim_goal(arguments: dict) -> dict:
     goal = str(arguments.get("goal", "")).strip()
-    result = run_sim_goal(goal, SIM)
+    result = RUNTIME.intent(goal)
     return _text_result(json.dumps(result, ensure_ascii=False, indent=2))
 
 
 def _tool_iot_hub_status(_arguments: dict) -> dict:
-    return _text_result(json.dumps(HUB.status(), ensure_ascii=False, indent=2))
+    return _text_result(json.dumps(RUNTIME.status(), ensure_ascii=False, indent=2))
 
 
 def _tool_iot_devices_list(arguments: dict) -> dict:
-    devices = HUB.devices(include_address=bool(arguments.get("include_address", False)))
+    devices = RUNTIME.devices(
+        include_address=bool(arguments.get("include_address", False))
+    )
     return _text_result(json.dumps({"devices": devices}, ensure_ascii=False, indent=2))
 
 
 def _tool_iot_device_describe(arguments: dict) -> dict:
     device_id = str(arguments.get("device_id", ""))
     try:
-        device = HUB.describe(
+        device = RUNTIME.describe(
             device_id, include_address=bool(arguments.get("include_address", False))
         )
     except AccessError as exc:
@@ -360,7 +369,7 @@ def _tool_iot_device_describe(arguments: dict) -> dict:
 
 def _tool_iot_tool_catalog(_arguments: dict) -> dict:
     return _text_result(
-        json.dumps({"tools": HUB.catalog()}, ensure_ascii=False, indent=2)
+        json.dumps({"tools": RUNTIME.catalog()}, ensure_ascii=False, indent=2)
     )
 
 
@@ -371,7 +380,7 @@ def _tool_iot_call(arguments: dict) -> dict:
     if not isinstance(call_arguments, dict):
         return _text_result("arguments 必须是对象", is_error=True)
     try:
-        result = HUB.call(
+        result = RUNTIME.call(
             device_id,
             capability,
             call_arguments,

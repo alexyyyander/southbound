@@ -147,6 +147,95 @@ body::before {
 
 /* Layout */
 
+.flowbar {
+  display: grid;
+  grid-template-columns: auto minmax(50px, 1fr) auto minmax(50px, 1fr) auto minmax(0, 300px);
+  gap: 12px;
+  align-items: center;
+  margin-top: 14px;
+  padding: 9px 12px;
+  border-top: 1px solid var(--rule);
+  border-bottom: 1px solid var(--rule);
+  background: rgba(244, 246, 245, 0.58);
+}
+
+.flowbar__node strong {
+  display: block;
+  font-family: var(--serif);
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.2;
+}
+
+.flowbar__node span {
+  display: block;
+  font-family: var(--mono);
+  font-size: 9px;
+  line-height: 1.4;
+  color: var(--muted);
+}
+
+.flowbar__node--hub {
+  padding: 2px 14px;
+  border-left: 2px solid var(--signal);
+  border-right: 2px solid var(--signal);
+}
+
+.flowbar__track {
+  position: relative;
+  height: 1px;
+  background: var(--rule);
+}
+
+.flowbar__track i {
+  position: absolute;
+  top: -3px;
+  left: 0;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--signal);
+  opacity: 0;
+}
+
+.flowbar__track.is-active i {
+  animation: flow-right 0.75s ease;
+}
+
+.flowbar__track.is-reverse i {
+  animation-name: flow-left;
+}
+
+.flowbar__last {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  text-align: right;
+  font-family: var(--mono);
+  font-size: 9.5px;
+  color: var(--muted);
+}
+
+#flow-last {
+  color: var(--ink-2);
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+@keyframes flow-right {
+  0% { left: 0; opacity: 0; }
+  20% { opacity: 1; }
+  100% { left: calc(100% - 7px); opacity: 0; }
+}
+
+@keyframes flow-left {
+  0% { left: calc(100% - 7px); opacity: 0; }
+  20% { opacity: 1; }
+  100% { left: 0; opacity: 0; }
+}
+
 .layout {
   display: grid;
   grid-template-columns: 196px minmax(0, 1fr) 380px;
@@ -986,6 +1075,27 @@ input[type="range"] {
 
   .rail {
     grid-template-columns: 1fr 1fr;
+  }
+
+  .flowbar {
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+
+  .flowbar__track {
+    display: none;
+  }
+
+  .flowbar__node--hub {
+    padding: 6px 0;
+    border-right: 0;
+    border-left: 0;
+    border-top: 2px solid var(--signal);
+    border-bottom: 2px solid var(--signal);
+  }
+
+  .flowbar__last {
+    text-align: left;
   }
 
   .panel__head {
