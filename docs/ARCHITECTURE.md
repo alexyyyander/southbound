@@ -156,7 +156,7 @@ southbound mcp
       "open_ports": [22, 80, 139, 443, 445, 5000, 8088],
       "identity": "Demo NAS",
       "netbios": "DEMO-NAS",
-      "http": [{"port": 5000, "status": 200, "title": "Demo-NAS - Demo NAS"}],
+      "http": [{"port": 5000, "status": 200, "title": "Demo-NAS"}],
       "exposures": ["SMB 开放", "DNS 服务"]
     }
   ]
