@@ -30,17 +30,22 @@
         <div class="stage__bar">
           <div class="stage__live"><span class="live-dot"></span> LIVE · SSE</div>
           <div class="stage__controls">
+            <button id="view-toggle" class="toggle toggle--view" type="button" aria-pressed="false">
+              视图 <span class="toggle__value">2.5D</span>
+            </button>
             <button id="automation-toggle" class="toggle is-on" type="button" aria-pressed="true">
               自动模式 <span class="toggle__value">ON</span>
             </button>
             <button id="scene-reset" class="ghost-button" type="button">重置房间</button>
           </div>
         </div>
-        <div class="stage__canvas">
+        <div class="stage__canvas" id="stage-canvas">
           <canvas id="room-canvas" width="1000" height="620" aria-label="可交互的 2.5D 房间，包含客厅、玄关、卧室和书房"></canvas>
+          <canvas id="splat-canvas" aria-label="合成高斯泼溅风格的房间预览"></canvas>
+          <div id="splat-overlay" class="splat-overlay"></div>
           <div id="scene-notice" class="scene-notice" aria-live="polite"></div>
-          <div class="stage__hint"><strong>WASD / 方向键</strong> 移动 · 点击地板走过去 · 点击设备操作</div>
-          <div class="stage__stamp">SIMULATED<br>LOCAL ONLY</div>
+          <div class="stage__hint" id="stage-hint"><strong>WASD / 方向键</strong> 移动 · 点击地板走过去 · 点击设备操作</div>
+          <div class="stage__stamp" id="stage-stamp">SIMULATED<br>LOCAL ONLY</div>
         </div>
       </section>
 
@@ -127,6 +132,7 @@
       <div class="last-event" id="last-event">等待第一个事件</div>
     </footer>
   </div>
+  <script src="/splat.js"></script>
   <script src="/scene.js"></script>
 </body>
 </html>

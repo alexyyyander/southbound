@@ -1,10 +1,15 @@
 # 2.5D Scene & 3DGS Visual Layer
 
-`/scene` is the current playable room demo. It is deliberately a **procedural
-2.5D control map**, not a photoreal renderer: coordinates, device anchors,
-click targets, policy checks, audit, and read-back verification all stay
-deterministic. A later 3D Gaussian Splatting (3DGS) layer can make the same
-room look real without changing that control plane.
+`/scene` ships two views over one authoritative control map:
+
+- **2.5D control map**: deterministic positions, click targets, policy, audit,
+  navigation, and read-back verification.
+- **Synthetic splat preview**: a dependency-free WebGL point-splat renderer
+  generated from the same room geometry, for judging the visual direction
+  before capturing a real room.
+
+A later captured 3D Gaussian Splatting (3DGS) asset can make the room
+photoreal without changing the control plane.
 
 ## Current 2.5D model
 
@@ -28,6 +33,30 @@ state read-back → automation.verified / automation.failed → agent.notice
 - The avatar is a proxy for a person or a robot; it is not camera tracking.
 - Only low-risk actions run in the scene's automatic mode. High-risk devices
   still require policy and confirmation.
+
+## Synthetic splat preview (shipped)
+
+![Synthetic splat preview](splat.jpg)
+
+Switch **视图 2.5D** to **SPLAT** in the scene bar. This is intentionally
+labeled *Synthetic splat / not trained*:
+
+- `southbound/web/splat.js` samples the floor, walls, window, door, furniture,
+  and pendant light into roughly point-splat primitives.
+- A small WebGL2/WebGL1 shader renders soft, additive points under a
+  perspective camera; depth is intentionally not used so the cutaway room
+  reads like a radiance splat rather than a solid mesh.
+- Drag to orbit and scroll to zoom. Device hotspots and the avatar marker are
+  projected with the same view-projection matrix.
+- Clicking a hotspot selects the same `device_id`; movement and automation
+  still go through `SceneController` and `AccessHub`.
+- No external viewer library, no `.splat` asset, and no network request.
+- If WebGL is unavailable, the 2.5D canvas remains the fallback and the view
+  toggle disables.
+
+This preview validates the visual direction, not the final 3DGS quality. It
+is a synthetic point cloud, so it cannot reproduce captured textures,
+view-dependent reflections, or fine geometry.
 
 ## 3DGS as a skin, not a second brain
 
@@ -71,13 +100,14 @@ The UI maps a click on the splat viewer's device hotspot back to
 
 ## Browser plan
 
-- WebGL2 viewer (Three.js + a splat renderer) as an optional `/scene?view=splat`
-  mode; 2.5D canvas remains the fallback.
+- The 2.5D canvas is the default and always available.
+- The shipped synthetic splat view is the switchable WebGL preview.
+- For a captured 3DGS asset, use a WebGL2 splat renderer behind the same
+  toggle; 2.5D remains the fallback.
 - Progressive loading: low-res splat first, then full asset; show a progress
   state on the stage.
 - Keep the HUD, task list, device inspector, SSE feed, and automation controls
   unchanged.
-- Add a "schematic / realistic" toggle; both views share the same state.
 - Respect `prefers-reduced-motion` and cap device pixel ratio.
 
 ## Performance and safety
@@ -92,6 +122,7 @@ The UI maps a click on the splat viewer's device hotspot back to
 
 ## Not implemented yet
 
-This repository currently ships the procedural 2.5D scene only. 3DGS capture,
-training, asset hosting, and the WebGL viewer are a separate phase; they
-should not gate the control-layer demo.
+The synthetic splat preview is shipped, but a real captured 3DGS asset is not.
+Capture, COLMAP/nerfstudio/gsplat training, asset hosting, compression, and
+progressive loading remain a separate phase; they should not gate the
+control-layer demo.

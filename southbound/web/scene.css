@@ -234,6 +234,134 @@
   height: 100%;
 }
 
+#splat-canvas {
+  position: absolute;
+  inset: 0;
+  display: none;
+  width: 100%;
+  height: 100%;
+  cursor: grab;
+  touch-action: none;
+}
+
+#splat-canvas:active {
+  cursor: grabbing;
+}
+
+.splat-overlay {
+  position: absolute;
+  inset: 0;
+  display: none;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.stage__canvas.is-splat {
+  background: #09161b;
+  cursor: default;
+}
+
+.stage__canvas.is-splat #room-canvas {
+  display: none;
+}
+
+.stage__canvas.is-splat #splat-canvas,
+.stage__canvas.is-splat .splat-overlay {
+  display: block;
+}
+
+.splat-hotspot {
+  position: absolute;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  max-width: 150px;
+  padding: 3px 6px;
+  border: 1px solid rgba(232, 237, 238, 0.38);
+  background: rgba(9, 22, 27, 0.82);
+  color: #dce7e6;
+  font-family: var(--mono);
+  font-size: 8.5px;
+  line-height: 1.2;
+  white-space: nowrap;
+  pointer-events: auto;
+  cursor: pointer;
+  transform: translate(-50%, -50%);
+}
+
+.splat-hotspot::before {
+  content: "";
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: var(--teal);
+}
+
+.splat-hotspot.is-on::before {
+  background: #f2c96b;
+  box-shadow: 0 0 0 3px rgba(242, 201, 107, 0.12);
+}
+
+.splat-hotspot.is-selected {
+  border-color: var(--signal);
+  color: #ffe1d6;
+}
+
+.splat-hotspot.is-selected::before {
+  background: var(--signal);
+}
+
+.splat-zone {
+  position: absolute;
+  color: rgba(220, 231, 230, 0.42);
+  font-family: var(--mono);
+  font-size: 8px;
+  letter-spacing: 0.06em;
+  white-space: nowrap;
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.55);
+  transform: translate(-50%, -50%);
+}
+
+.splat-avatar {
+  position: absolute;
+  width: 10px;
+  height: 10px;
+  border: 1px solid #ffe1d6;
+  border-radius: 50%;
+  background: var(--signal);
+  box-shadow: 0 0 0 4px rgba(207, 74, 41, 0.18), 0 0 18px rgba(207, 74, 41, 0.6);
+  transform: translate(-50%, -50%);
+}
+
+.splat-avatar span {
+  position: absolute;
+  top: -15px;
+  left: 50%;
+  color: #ffc7b5;
+  font-family: var(--mono);
+  font-size: 7.5px;
+  letter-spacing: 0.05em;
+  transform: translateX(-50%);
+}
+
+.stage__canvas.is-splat .stage__hint {
+  border-color: rgba(232, 237, 238, 0.22);
+  background: rgba(9, 22, 27, 0.78);
+  color: #c4d4d3;
+}
+
+.stage__canvas.is-splat .stage__hint strong {
+  color: #f2c96b;
+}
+
+.stage__canvas.is-splat .stage__stamp {
+  color: rgba(232, 237, 238, 0.48);
+}
+
+.toggle--view .toggle__value {
+  color: #9bd6cd;
+}
+
 .stage__hint {
   position: absolute;
   bottom: 13px;

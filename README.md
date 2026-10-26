@@ -7,7 +7,7 @@
 <p align="center"><strong>本地优先的 IoT Agent 南向接入层</strong></p>
 
 <p align="center">
-  <img alt="version 0.7.0" src="https://img.shields.io/badge/version-0.7.0-0F7D78?style=flat-square">
+  <img alt="version 0.8.0" src="https://img.shields.io/badge/version-0.8.0-0F7D78?style=flat-square">
   <img alt="Python 3.10+" src="https://img.shields.io/badge/python-3.10%2B-12262F?style=flat-square">
   <img alt="MIT" src="https://img.shields.io/badge/license-MIT-CF4A29?style=flat-square">
   <img alt="Alpha" src="https://img.shields.io/badge/status-alpha-70848B?style=flat-square">
@@ -60,6 +60,7 @@
 | **多协议 adapter** | Simulator、Home Assistant REST、MQTT、Zigbee2MQTT |
 | **运行时与事件流** | SouthboundRuntime + EventBus + SSE；面板实时显示 northbound/southbound |
 | **2.5D 房间实验** | `GET /scene`：可移动 avatar、presence 信号、点击设备、自动反射与回读验证 |
+| **Splat 预览** | `/scene` 内切换 WebGL 合成 splat：轨道旋转、设备热点、avatar 投影；同一控制层 |
 | **可视化** | 网络拓扑、设备清单、模拟端点、Agent 控制台、接入表单 |
 | **MCP** | 15 个工具：发现、深扫、模拟器、接入层、受控 onboarding |
 | **无硬件闭环** | 六个虚拟端点 + 确定性 agent trace，没有设备也能跑 |
@@ -87,6 +88,10 @@ python3 -m southbound serve
 4. 在 Agent 面板输入“关闭书房插座”，对比 northbound 意图与 southbound 事件。
 
 ![Southbound 2.5D room](docs/scene.jpg)
+
+在 `/scene` 顶部把 **视图 2.5D** 切到 **SPLAT**：这是从同一套房间几何采样的合成高斯泼溅风格预览，可拖动旋转、滚轮缩放；设备热点、avatar 和控制仍走同一套 presence/策略/审计路径。它是视觉原型，不是训练出来的 3DGS 资产。
+
+![Southbound synthetic splat preview](docs/splat.jpg)
 
 也可以直接命令行：
 
@@ -341,7 +346,7 @@ southbound/
 │   │       ├── sim.py
 │   │       ├── home_assistant.py
 │   │       └── mqtt.py
-│   └── web/                 # 观测站面板 + scene.html / scene.css / scene.js
+│   └── web/                 # 观测站面板 + scene.html / scene.js / splat.js
 ├── assets/                  # Logo、社交预览与品牌说明
 ├── config/access.example.json
 ├── docs/                    # About、架构、协议、演示、接入层、onboarding、芯片、信号、硬件、扫描
@@ -403,6 +408,7 @@ CI 在 Python 3.10–3.13 上跑 ruff、单元测试和 wheel/sdist 构建。
 - SouthboundRuntime + EventBus + SSE + 面板 flowbar；
 - 受控 onboarding / commissioning / 持久化 / 撤销；
 - 2.5D 房间实验：presence 信号、低风险自动反射、Agent notice、回读验证；
+- WebGL 合成 splat 预览：轨道相机、设备热点、avatar 投影；
 - 15 个 MCP 工具；
 - 55 项测试、CI、wheel/sdist。
 
@@ -413,7 +419,7 @@ CI 在 Python 3.10–3.13 上跑 ruff、单元测试和 wheel/sdist 构建。
 - 设备侧事件订阅（MQTT/HA）；
 - Matter 原生 controller、ESPHome 原生 API；
 - 真实 ESP32/Matter/Zigbee 硬件验证；
-- **3DGS 视觉层（可选）**：高斯泼溅只作为真实感展示皮肤；2.5D 地图仍是设备锚点、碰撞、策略与审计的权威层。建议用 nerfstudio / gsplat 从本地视频生成 `.splat`，再映射设备热点；大文件放 `data/` 或 Git LFS，不提交真实家庭影像。
+- **真实 3DGS 视觉层（可选）**：当前已有合成 splat 预览；真实照片级效果需要采集视频、COLMAP + nerfstudio/gsplat 训练，再把 `.splat` 资产接入同一 WebGL 层。2.5D 地图仍是设备锚点、碰撞、策略与审计的权威层；大文件放 `data/` 或 Git LFS，不提交真实家庭影像。
 
 ## 安全与边界
 

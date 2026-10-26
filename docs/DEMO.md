@@ -27,12 +27,24 @@ python3 -m southbound serve
 - **验证**：每次自动动作都会产生 `automation.proposed → command → state → automation.verified` 事件；失败会升级为 `automation.failed` + `agent.notice`。
 - **任务**：四个演示任务会随着操作自动勾选，适合现场讲解。
 
-### 3DGS 视觉层（下一阶段）
+### 合成 splat 预览
 
-当前场景是**程序化 2.5D 控制图**，不是照片级渲染。这样设备锚点、碰撞、点击、策略和审计都可以确定性验证。未来可以加一层可选的 **3D Gaussian Splatting** 视觉皮肤：
+在 `/scene` 顶部把“视图 2.5D”切到 **SPLAT**：
+
+![Synthetic splat preview](splat.jpg)
+
+- 从同一套房间几何采样点云，用 WebGL 软点做 additive 渲染；
+- 拖动旋转、滚轮缩放；设备热点和 avatar 标记跟随同一投影矩阵；
+- 点击热点仍选中同一个 `device_id`，动作继续走 AccessHub；
+- 这是 **synthetic splat / not trained**，不是训练出来的 3DGS，也不发起外部网络请求；
+- WebGL 不可用时自动留在 2.5D，视图切换会禁用。
+
+### 真实 3DGS（下一阶段）
+
+当前场景是**程序化 2.5D 控制图 + 合成 splat 预览**，还不是照片级渲染。这样设备锚点、碰撞、点击、策略和审计都可以确定性验证。未来可以加一层真实的 **3D Gaussian Splatting** 视觉皮肤：
 
 1. 用本地视频/照片经 COLMAP + nerfstudio / gsplat 生成 `.splat` 或 `.ply`；
-2. 在浏览器里用 Three.js / WebGL splat viewer 渲染；
+2. 在浏览器里用 WebGL splat viewer 渲染；
 3. 把房间坐标映射到 splat 坐标，叠加设备 hotspot 和 avatar；
 4. 2.5D 地图继续负责导航、设备锚点、规则和审计，3DGS 只负责真实感。
 

@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "southbound"
-version = "0.7.0"
+version = "0.8.0"
 description = "Southbound: local-first access layer for IoT agents"
 readme = "README.md"
 requires-python = ">=3.10"

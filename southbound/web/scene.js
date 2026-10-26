@@ -69,6 +69,7 @@
     lastEvent: null,
     agentTouched: false,
     done: { light: false, dim: false, purifier: false, agent: false },
+    viewMode: "2d",
     local: {
       x: 1.5,
       y: 6.8,
@@ -85,6 +86,7 @@
   const keys = new Set();
   const seenEventIds = new Set();
   const hits = [];
+  let splat = null;
   let hoverId = null;
   let lastFrame = 0;
   let lastPresenceAt = 0;
@@ -353,6 +355,7 @@
   }
 
   function renderAll() {
+    if (splat && state.viewMode === "splat") splat.resize();
     renderHud();
     renderToggle();
     renderTasks();
@@ -360,6 +363,48 @@
     renderDevice();
     renderInbox();
     renderEvents();
+  }
+
+  function initSplat() {
+    const Renderer = window.SouthboundSplatRenderer;
+    const target = $("#splat-canvas");
+    if (!Renderer || !target || !$("#splat-overlay")) return;
+    splat = new Renderer({
+      canvas: target,
+      overlay: $("#splat-overlay"),
+      onSelect: selectDevice,
+    });
+    if (!splat.available) {
+      const button = $("#view-toggle");
+      button.disabled = true;
+      button.title = "当前浏览器不支持 WebGL";
+    }
+  }
+
+  function selectDevice(id) {
+    state.selectedId = id;
+    renderDeviceSelect();
+    renderDevice();
+  }
+
+  function toggleView() {
+    if (!splat || !splat.available) return;
+    const next = state.viewMode !== "splat";
+    state.viewMode = next ? "splat" : "2d";
+    $("#stage-canvas").classList.toggle("is-splat", next);
+    $("#view-toggle .toggle__value").textContent = next ? "SPLAT" : "2.5D";
+    $("#view-toggle").setAttribute("aria-pressed", String(next));
+    $("#stage-hint").innerHTML = next
+      ? "<strong>拖动旋转</strong> · 滚轮缩放 · WASD 移动 · 点击设备操作"
+      : "<strong>WASD / 方向键</strong> 移动 · 点击地板走过去 · 点击设备操作";
+    $("#stage-stamp").innerHTML = next
+      ? "SYNTHETIC SPLAT<br>NOT TRAINED"
+      : "SIMULATED<br>LOCAL ONLY";
+    splat.setActive(next);
+    if (next) {
+      renderDevice();
+      splat.render(state, performance.now());
+    }
   }
 
   function renderHud() {
@@ -719,15 +764,15 @@
       const point = canvasPoint(event);
       const hit = hitAt(point.x, point.y);
       if (hit) {
-        state.selectedId = hit.id;
-        renderDeviceSelect();
-        renderDevice();
+        selectDevice(hit.id);
         return;
       }
       const floor = floorPoint(point.x, point.y);
       if (!floor) return;
       state.local.target = { x: floor.x, y: floor.y };
     });
+
+    $("#view-toggle").addEventListener("click", toggleView);
 
     window.addEventListener("resize", resize);
     if (window.ResizeObserver) {
@@ -781,6 +826,7 @@
     view.scale = Math.min(rect.width / 760, rect.height / 500);
     view.ox = rect.width / 2 - 64 * view.scale;
     view.oy = rect.height / 2 - 131 * view.scale;
+    if (splat) splat.resize();
   }
 
   function world(x, y, z = 0) {
@@ -1410,6 +1456,11 @@
 
   function draw(timestamp) {
     if (!state.room) return;
+    if (state.viewMode === "splat" && splat && splat.active) {
+      splat.render(state, timestamp);
+      $("#last-event").textContent = lastEventText(state.lastEvent);
+      return;
+    }
     const rect = canvas.getBoundingClientRect();
     if (Math.abs(rect.width - view.width) > 0.5 || Math.abs(rect.height - view.height) > 0.5) {
       resize();
@@ -1455,6 +1506,7 @@
   }
 
   async function init() {
+    initSplat();
     bindUi();
     renderSuggestions();
     resize();

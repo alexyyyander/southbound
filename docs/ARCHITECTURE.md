@@ -240,7 +240,7 @@ southbound mcp
 - **P3 Zigbee 与事件流**：SLZB-06 + zigbee2mqtt；把轮询改成 MQTT 事件订阅。
 - **P4 LLM planner**：在 sim_agent 的工具层上接本地 3B 模型；加策略引擎、审计与回滚。
 - **P5 生产化**：IoT VLAN、认证、多用户、打包与升级。
-- **可选视觉层**：3D Gaussian Splatting 作为 `/scene` 的真实感皮肤；设备锚点、碰撞、规则与审计仍以 2.5D 地图为准。
+- **可选视觉层**：合成 splat 预览已随 2.5D 场景发布；真实 3D Gaussian Splatting 资产作为后续真实感皮肤，设备锚点、碰撞、规则与审计仍以 2.5D 地图为准。
 
 ## 10. 结论
 

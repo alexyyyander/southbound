@@ -54,7 +54,7 @@ def _load_json(name: str) -> dict:
 
 
 class Handler(BaseHTTPRequestHandler):
-    server_version = "SouthboundDemo/0.7"
+    server_version = "SouthboundDemo/0.8"
 
     def log_message(self, fmt: str, *args) -> None:  # keep stdout clean
         print(f"[viz] {self.address_string()} {fmt % args}", flush=True)

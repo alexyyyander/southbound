@@ -6,6 +6,26 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-10-26
+
+### Added
+
+- **Synthetic splat preview** in `/scene`: a dependency-free WebGL point-splat
+  renderer generated from the procedural room geometry, with orbit/zoom,
+  projected device hotspots, and a moving avatar marker.
+- **2.5D / Splat view toggle**: both views share the same presence,
+  automation, SSE events, device inspector, and AccessHub path.
+- **Visual fallback**: WebGL-less browsers keep the 2.5D control map and the
+  view toggle disables cleanly.
+- Documentation for the synthetic preview and the future captured 3DGS asset
+  pipeline.
+
+### Changed
+
+- Version bump to `0.8.0`.
+- `docs/SCENE.md` distinguishes the shipped synthetic preview from a trained
+  Gaussian Splatting capture.
+
 ## [0.7.0] - 2026-10-26
 
 ### Added

@@ -1,6 +1,6 @@
 # Protocol & API
 
-版本：`0.7.0`。这是一份面向实现的协议说明：北向 agent 如何调用 Southbound，南向 adapter 如何执行，事件长什么样。
+版本：`0.8.0`。这是一份面向实现的协议说明：北向 agent 如何调用 Southbound，南向 adapter 如何执行，事件长什么样。
 
 ## 1. 两个平面
 
