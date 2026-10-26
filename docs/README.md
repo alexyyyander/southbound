@@ -1,7 +1,8 @@
 # 文档索引
 
 - [About Southbound](ABOUT.md) — 项目定位、命名由来、设计原则与边界
-- [演示](DEMO.md) — 面板、CLI、MCP、受控接入与故障排查
+- [演示](DEMO.md) — 面板、2.5D 房间、CLI、MCP、受控接入与故障排查
+- [2.5D 场景与 3DGS](SCENE.md) — 当前控制图、坐标映射与高斯泼溅视觉层规划
 - [协议与 API](PROTOCOL.md) — northbound/southbound 契约、HTTP、SSE 事件与数据模型
 - [技术架构与可行性](ARCHITECTURE.md) — 组件、数据契约、部署形态、可行性矩阵与路线图
 - [接入工具层](ACCESS_LAYER.md) — 设备/能力模型、策略、审计、适配器、MCP/CLI/HTTP 接口

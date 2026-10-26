@@ -4,8 +4,17 @@
 
 | Version | Supported |
 |---|---|
-| 0.6.x | Yes |
+| 0.7.x | Yes |
 | < 0.6 | No |
+
+## Scene demo
+
+The `/scene` 2.5D room is a local, simulated presence demo. It does not use
+cameras, microphones, or real person tracking. Avatar coordinates are sent
+only to the local runtime and are not persisted. Scene automation only calls
+low-risk capabilities through `AccessHub`; it never auto-commissions devices.
+Do not map real camera tracking into this endpoint without consent, retention,
+and access-control review.
 
 ## Reporting a vulnerability
 

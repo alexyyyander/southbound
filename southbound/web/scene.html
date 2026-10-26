@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Southbound · Room 01</title>
+  <link rel="stylesheet" href="/styles.css">
+  <link rel="stylesheet" href="/scene.css">
+</head>
+<body class="scene-page">
+  <div class="scene-shell">
+    <header class="scene-head">
+      <div class="scene-head__intro">
+        <a class="scene-back" href="/">← 返回观测站</a>
+        <p class="scene-kicker">Southbound / Field Lab 01 · 2026-10-26 · Local only</p>
+        <h1>Room <span>01</span></h1>
+        <p class="scene-lede">一个可以走进去的南向接入实验。移动会变成 presence 信号，自动动作经过策略、审计与回读验证。</p>
+      </div>
+      <div class="hud" aria-label="场景状态">
+        <div><span>ZONE</span><strong id="hud-zone">—</strong></div>
+        <div><span>DEVICES</span><strong id="hud-devices">—</strong></div>
+        <div><span>EVENTS</span><strong id="hud-events">0</strong></div>
+        <div><span>AUTOMATION</span><strong id="hud-automation">ON</strong></div>
+      </div>
+    </header>
+
+    <main class="scene-main">
+      <section class="stage" aria-labelledby="stage-title">
+        <h2 id="stage-title" class="visually-hidden">2.5D 房间模型</h2>
+        <div class="stage__bar">
+          <div class="stage__live"><span class="live-dot"></span> LIVE · SSE</div>
+          <div class="stage__controls">
+            <button id="automation-toggle" class="toggle is-on" type="button" aria-pressed="true">
+              自动模式 <span class="toggle__value">ON</span>
+            </button>
+            <button id="scene-reset" class="ghost-button" type="button">重置房间</button>
+          </div>
+        </div>
+        <div class="stage__canvas">
+          <canvas id="room-canvas" width="1000" height="620" aria-label="可交互的 2.5D 房间，包含客厅、玄关、卧室和书房"></canvas>
+          <div id="scene-notice" class="scene-notice" aria-live="polite"></div>
+          <div class="stage__hint"><strong>WASD / 方向键</strong> 移动 · 点击地板走过去 · 点击设备操作</div>
+          <div class="stage__stamp">SIMULATED<br>LOCAL ONLY</div>
+        </div>
+      </section>
+
+      <aside class="lab" aria-label="实验台">
+        <section class="lab-block">
+          <header class="lab-head">
+            <h2>演示任务</h2>
+            <span id="task-progress">0 / 4</span>
+          </header>
+          <ol id="task-list" class="task-list">
+            <li data-task="light">
+              <span class="task-index">01</span>
+              <div><strong>走进客厅</strong><p>让 presence 触发客厅主灯</p></div>
+              <span class="task-check" aria-hidden="true"></span>
+            </li>
+            <li data-task="dim">
+              <span class="task-index">02</span>
+              <div><strong>把灯调到 30%</strong><p>选中客厅主灯，点一个亮度预设</p></div>
+              <span class="task-check" aria-hidden="true"></span>
+            </li>
+            <li data-task="purifier">
+              <span class="task-index">03</span>
+              <div><strong>走进卧室</strong><p>让净化器在空气质量不达标时启动</p></div>
+              <span class="task-check" aria-hidden="true"></span>
+            </li>
+            <li data-task="agent">
+              <span class="task-index">04</span>
+              <div><strong>让 Agent 关插座</strong><p>在下方输入“关闭书房插座”</p></div>
+              <span class="task-check" aria-hidden="true"></span>
+            </li>
+          </ol>
+          <p class="lab-note">自动模式只执行低风险反射。每个动作仍经过 AccessHub 的策略、审计和回读验证。</p>
+        </section>
+
+        <section class="lab-block">
+          <header class="lab-head">
+            <h2>设备操作</h2>
+            <span id="device-mode">点击选择</span>
+          </header>
+          <label class="visually-hidden" for="device-select">选择设备</label>
+          <select id="device-select" class="device-select"></select>
+          <div id="device-card" class="device-card">
+            <p class="empty">点击房间里的设备，或从上方列表选择。</p>
+          </div>
+        </section>
+
+        <section class="lab-block">
+          <header class="lab-head">
+            <h2>Agent</h2>
+            <span>northbound</span>
+          </header>
+          <div id="agent-inbox" class="inbox">
+            <p class="empty">等待 agent.notice…</p>
+          </div>
+          <form id="agent-form" class="agent-form">
+            <label class="visually-hidden" for="agent-input">Agent 指令</label>
+            <input id="agent-input" type="text" placeholder="例如：关闭书房插座" autocomplete="off">
+            <button type="submit">执行</button>
+          </form>
+          <div id="agent-suggestions" class="suggestions"></div>
+          <div id="agent-summary" class="agent-summary"></div>
+        </section>
+
+        <section class="lab-block lab-block--events">
+          <header class="lab-head">
+            <h2>实时事件</h2>
+            <span>SSE</span>
+          </header>
+          <ol id="event-list" class="event-list" aria-live="polite">
+            <li class="empty">等待第一个事件…</li>
+          </ol>
+        </section>
+      </aside>
+    </main>
+
+    <footer class="scene-foot">
+      <div class="flow" aria-label="Northbound 与 Southbound 流向">
+        <div class="flow-node"><strong>Agent</strong><span>northbound</span></div>
+        <div class="flow-line" id="flow-north"><i></i></div>
+        <div class="flow-node flow-node--hub"><strong>Southbound</strong><span>policy · audit · adapters</span></div>
+        <div class="flow-line" id="flow-south"><i></i></div>
+        <div class="flow-node"><strong>Devices</strong><span>scene · simulator</span></div>
+      </div>
+      <div class="last-event" id="last-event">等待第一个事件</div>
+    </footer>
+  </div>
+  <script src="/scene.js"></script>
+</body>
+</html>

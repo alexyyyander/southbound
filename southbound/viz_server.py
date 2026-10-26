@@ -35,10 +35,12 @@ from .access.commissioning import CommissionStore
 from .access.errors import AccessError
 from .paths import DATA_DIR, WEB_DIR
 from .runtime import SouthboundRuntime
+from .scene import SceneController
 
 RUNTIME = SouthboundRuntime(store=CommissionStore(DATA_DIR / "commissioned.json"))
 SIM = RUNTIME.simulator
 HUB = RUNTIME.hub
+SCENE = SceneController(RUNTIME)
 
 
 def _load_json(name: str) -> dict:
@@ -52,7 +54,7 @@ def _load_json(name: str) -> dict:
 
 
 class Handler(BaseHTTPRequestHandler):
-    server_version = "SouthboundDemo/0.6"
+    server_version = "SouthboundDemo/0.7"
 
     def log_message(self, fmt: str, *args) -> None:  # keep stdout clean
         print(f"[viz] {self.address_string()} {fmt % args}", flush=True)
@@ -77,6 +79,12 @@ class Handler(BaseHTTPRequestHandler):
             return
         if path == "/api/sim/devices":
             self._json({"devices": SIM.list_devices(), "summary": SIM.summary()})
+            return
+        if path == "/api/scene/state":
+            self._json(SCENE.snapshot())
+            return
+        if path in ("/scene", "/scene.html"):
+            self._static("/scene.html")
             return
         if path in ("/api/access/status", "/api/northbound/status"):
             self._json(RUNTIME.status())
@@ -151,6 +159,24 @@ class Handler(BaseHTTPRequestHandler):
         if path == "/api/sim/reset":
             devices = RUNTIME.reset()
             self._json({"ok": True, "devices": devices})
+            return
+        if path == "/api/scene/presence":
+            try:
+                result = SCENE.update_presence(
+                    body.get("x"),
+                    body.get("y"),
+                    str(body.get("client_id") or "local"),
+                )
+            except (TypeError, ValueError) as exc:
+                self._json({"ok": False, "error": str(exc)}, status=400)
+                return
+            self._json(result)
+            return
+        if path == "/api/scene/automation":
+            self._json(SCENE.set_automation(bool(body.get("enabled", False))))
+            return
+        if path == "/api/scene/reset":
+            self._json(SCENE.reset())
             return
         if path in ("/api/access/call", "/api/northbound/call"):
             try:
@@ -282,6 +308,7 @@ def serve(
     server = ThreadingHTTPServer((host, port), Handler)
     url = f"http://{host}:{port}/"
     print(f"Southbound demo running at {url}", flush=True)
+    print(f"Southbound 2.5D room at {url}scene", flush=True)
     if open_browser:
         webbrowser.open(url)
     try:

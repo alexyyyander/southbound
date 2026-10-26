@@ -82,7 +82,7 @@ southbound mcp
 | `access/commissioning.py` | 已授权设备的非敏感持久化记录与启动恢复 | 可用 |
 | `config/access.example.json` | HA / MQTT / Zigbee2MQTT 配置示例 | 可用 |
 | `southbound/web/` | 观测站风格可视化面板 | 可用 |
-| `tests/` | 标准库 unittest，覆盖分级、模拟闭环、接入层策略与审计、运行时/事件总线、受控接入 | 46 项通过 |
+| `tests/` | 标准库 unittest，覆盖分级、模拟闭环、接入层策略与审计、运行时/事件总线、受控接入、2.5D 场景 | 55 项通过 |
 
 ### 接入工具层
 
@@ -235,10 +235,12 @@ southbound mcp
 
 - **P0 发现与分级（已完成）**：ARP/mDNS/SSDP、深扫、OUI、T0–T3、MCP。
 - **P1 无硬件闭环与接入层（已完成）**：六设备模拟器、确定性 agent trace、可视化面板、统一 CLI、接入工具层（模型/策略/审计/四类 adapter）、SouthboundRuntime/EventBus/SSE、受控 onboarding/commissioning、测试。
+- **P1.5 2.5D 场景实验（已完成）**：可移动 avatar 产生 presence，场景反射规则经 AccessHub 执行并回读验证，`/scene` 提供可讲解的游戏化控制台。
 - **P2 第一条真实链路**：ESP32-S3 + ESPHome + 一个 Matter Wi-Fi 插座；HA/MQTT 落在 NAS；先经 HA/MQTT adapter 接入。
 - **P3 Zigbee 与事件流**：SLZB-06 + zigbee2mqtt；把轮询改成 MQTT 事件订阅。
 - **P4 LLM planner**：在 sim_agent 的工具层上接本地 3B 模型；加策略引擎、审计与回滚。
 - **P5 生产化**：IoT VLAN、认证、多用户、打包与升级。
+- **可选视觉层**：3D Gaussian Splatting 作为 `/scene` 的真实感皮肤；设备锚点、碰撞、规则与审计仍以 2.5D 地图为准。
 
 ## 10. 结论
 

@@ -7,7 +7,7 @@
 <p align="center"><strong>本地优先的 IoT Agent 南向接入层</strong></p>
 
 <p align="center">
-  <img alt="version 0.6.0" src="https://img.shields.io/badge/version-0.6.0-0F7D78?style=flat-square">
+  <img alt="version 0.7.0" src="https://img.shields.io/badge/version-0.7.0-0F7D78?style=flat-square">
   <img alt="Python 3.10+" src="https://img.shields.io/badge/python-3.10%2B-12262F?style=flat-square">
   <img alt="MIT" src="https://img.shields.io/badge/license-MIT-CF4A29?style=flat-square">
   <img alt="Alpha" src="https://img.shields.io/badge/status-alpha-70848B?style=flat-square">
@@ -59,6 +59,7 @@
 | **受控 onboarding** | 发现 → 授权 → 绑定 adapter/策略 → 工具目录；支持撤销与持久化 |
 | **多协议 adapter** | Simulator、Home Assistant REST、MQTT、Zigbee2MQTT |
 | **运行时与事件流** | SouthboundRuntime + EventBus + SSE；面板实时显示 northbound/southbound |
+| **2.5D 房间实验** | `GET /scene`：可移动 avatar、presence 信号、点击设备、自动反射与回读验证 |
 | **可视化** | 网络拓扑、设备清单、模拟端点、Agent 控制台、接入表单 |
 | **MCP** | 15 个工具：发现、深扫、模拟器、接入层、受控 onboarding |
 | **无硬件闭环** | 六个虚拟端点 + 确定性 agent trace，没有设备也能跑 |
@@ -77,6 +78,15 @@ python3 -m southbound serve
 2. 顶部 flowbar 出现 `intent → command → state → result`；
 3. 点击“模拟端点”下方的 **＋ 接入设备**，提交一个虚拟传感器；
 4. 新端点出现在面板，可以继续控制或点“移除”撤销。
+
+然后打开 `http://127.0.0.1:8765/scene` 进入 **2.5D 房间实验**：
+
+1. 用 WASD / 方向键或点击地板移动，走进客厅会触发 presence 信号与自动开灯；
+2. 点击房间里的设备，用 30% 亮度预设完成任务；
+3. 走进卧室，观察净化器在空气质量不达标时自动启动并回读验证；
+4. 在 Agent 面板输入“关闭书房插座”，对比 northbound 意图与 southbound 事件。
+
+![Southbound 2.5D room](docs/scene.jpg)
 
 也可以直接命令行：
 
@@ -282,6 +292,7 @@ claude mcp add --scope project southbound -- python3 /path/to/southbound/mcp_ser
 - `GET /api/events`（SSE）
 - `GET /api/events/recent?since=<id>`
 - `GET /api/inventory`、`GET /api/deep_scan`、`GET /api/sim/devices`
+- `GET /api/scene/state`、`POST /api/scene/presence`、`POST /api/scene/automation`、`POST /api/scene/reset`
 - `POST /api/sim/devices/<id>/action`、`POST /api/sim/reset`
 
 旧 `/api/access/*`、`/api/agent` 路径保留为别名。
@@ -308,6 +319,7 @@ southbound/
 ├── southbound/
 │   ├── cli.py               # 统一 CLI
 │   ├── runtime.py           # SouthboundRuntime + EventBus + SSE
+│   ├── scene.py             # 2.5D presence、低风险反射与验证
 │   ├── discover.py          # ARP / mDNS / SSDP
 │   ├── deep_scan.py         # 端口与服务指纹
 │   ├── registry.py          # OUI 与 T0–T3
@@ -329,11 +341,11 @@ southbound/
 │   │       ├── sim.py
 │   │       ├── home_assistant.py
 │   │       └── mqtt.py
-│   └── web/                 # 观测站面板
+│   └── web/                 # 观测站面板 + scene.html / scene.css / scene.js
 ├── assets/                  # Logo、社交预览与品牌说明
 ├── config/access.example.json
 ├── docs/                    # About、架构、协议、演示、接入层、onboarding、芯片、信号、硬件、扫描
-├── tests/                   # 46 项 unittest
+├── tests/                   # 55 项 unittest
 ├── data/                    # 本地生成，gitignored
 ├── viz_server.py            # 面板兼容入口
 ├── mcp_server.py            # MCP 兼容入口
@@ -360,7 +372,7 @@ make lint     # ruff check .
 make build    # wheel + sdist
 ```
 
-当前 46 项标准库测试覆盖分级规则、模拟器、agent 目标拆分、能力校验、策略、审计、工具目录、运行时/事件总线、受控接入与持久化、HA 适配器映射、MQTT payload 和 CLI 解析。
+当前 55 项标准库测试覆盖分级规则、模拟器、agent 目标拆分、能力校验、策略、审计、工具目录、运行时/事件总线、受控接入与持久化、2.5D 场景 presence/自动验证、HA 适配器映射、MQTT payload 和 CLI 解析。
 
 CI 在 Python 3.10–3.13 上跑 ruff、单元测试和 wheel/sdist 构建。
 
@@ -368,7 +380,8 @@ CI 在 Python 3.10–3.13 上跑 ruff、单元测试和 wheel/sdist 构建。
 
 - [文档索引](docs/README.md)
 - [About Southbound](docs/ABOUT.md) — 项目定位、命名与边界
-- [演示](docs/DEMO.md) — 面板、CLI、MCP 与故障排查
+- [演示](docs/DEMO.md) — 面板、2.5D 房间、CLI、MCP 与故障排查
+- [2.5D 场景与 3DGS](docs/SCENE.md) — 当前控制图、坐标映射与高斯泼溅视觉层规划
 - [协议与 API](docs/PROTOCOL.md) — northbound/southbound、HTTP、事件与 MCP schema
 - [技术架构与可行性](docs/ARCHITECTURE.md)
 - [接入工具层](docs/ACCESS_LAYER.md)
@@ -389,8 +402,9 @@ CI 在 Python 3.10–3.13 上跑 ruff、单元测试和 wheel/sdist 构建。
 - 四类 adapter、六个虚拟端点；
 - SouthboundRuntime + EventBus + SSE + 面板 flowbar；
 - 受控 onboarding / commissioning / 持久化 / 撤销；
+- 2.5D 房间实验：presence 信号、低风险自动反射、Agent notice、回读验证；
 - 15 个 MCP 工具；
-- 46 项测试、CI、wheel/sdist。
+- 55 项测试、CI、wheel/sdist。
 
 **下一步**
 
@@ -399,7 +413,7 @@ CI 在 Python 3.10–3.13 上跑 ruff、单元测试和 wheel/sdist 构建。
 - 设备侧事件订阅（MQTT/HA）；
 - Matter 原生 controller、ESPHome 原生 API；
 - 真实 ESP32/Matter/Zigbee 硬件验证；
-- 可选 2.5D 房屋视图；3D 只作为展示层，不是核心。
+- **3DGS 视觉层（可选）**：高斯泼溅只作为真实感展示皮肤；2.5D 地图仍是设备锚点、碰撞、策略与审计的权威层。建议用 nerfstudio / gsplat 从本地视频生成 `.splat`，再映射设备热点；大文件放 `data/` 或 Git LFS，不提交真实家庭影像。
 
 ## 安全与边界
 

@@ -114,6 +114,26 @@ body::before {
   line-height: 1.65;
 }
 
+.scene-cue {
+  margin: 12px 0 0;
+}
+
+.scene-cue a {
+  display: inline-block;
+  padding-bottom: 2px;
+  border-bottom: 1px solid var(--signal);
+  color: var(--signal);
+  font-family: var(--mono);
+  font-size: 10.5px;
+  text-decoration: none;
+}
+
+.scene-cue a:hover,
+.scene-cue a:focus-visible {
+  color: var(--ink);
+  border-bottom-color: var(--ink);
+}
+
 .masthead__stats {
   display: flex;
   border: 1px solid var(--rule);

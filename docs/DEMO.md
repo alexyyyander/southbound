@@ -14,7 +14,31 @@ python3 -m southbound serve
 
 ![Southbound dashboard](dashboard.jpg)
 
-## 1. Agent 控制台
+## 1. 2.5D 房间实验
+
+打开 `http://127.0.0.1:8765/scene`。这是一个可走进去的程序化 2.5D 房间，用来演示“信号 → 判断 → 动作 → 回读 → Agent 通知”的完整闭环。
+
+![Southbound 2.5D room](scene.jpg)
+
+- **移动**：WASD / 方向键，或点击地板让 avatar 走过去；进入不同区域会发送 presence 信号。
+- **自动模式**：默认开启。进入客厅会触发低风险开灯规则，进入卧室会触发净化器规则；动作仍经过 `AccessHub` 的策略、审计和状态回读。
+- **设备操作**：点击房间里的设备，或从右侧下拉框选择；灯、插座、窗帘、净化器都有直接操作按钮。
+- **Agent**：右侧收件箱会显示 `agent.notice`；输入“关闭书房插座”会把自然语言目标交给 northbound intent。
+- **验证**：每次自动动作都会产生 `automation.proposed → command → state → automation.verified` 事件；失败会升级为 `automation.failed` + `agent.notice`。
+- **任务**：四个演示任务会随着操作自动勾选，适合现场讲解。
+
+### 3DGS 视觉层（下一阶段）
+
+当前场景是**程序化 2.5D 控制图**，不是照片级渲染。这样设备锚点、碰撞、点击、策略和审计都可以确定性验证。未来可以加一层可选的 **3D Gaussian Splatting** 视觉皮肤：
+
+1. 用本地视频/照片经 COLMAP + nerfstudio / gsplat 生成 `.splat` 或 `.ply`；
+2. 在浏览器里用 Three.js / WebGL splat viewer 渲染；
+3. 把房间坐标映射到 splat 坐标，叠加设备 hotspot 和 avatar；
+4. 2.5D 地图继续负责导航、设备锚点、规则和审计，3DGS 只负责真实感。
+
+大文件放 `data/` 或 Git LFS；不要把真实家庭影像和未授权空间提交到公开仓库。
+
+## 2. Agent 控制台
 
 在 Agent 控制台输入：
 
@@ -40,7 +64,7 @@ northbound · state · 书房插座 · turn_off
 northbound · result · 客厅主灯：开，亮度 60%；书房插座：关，功率 0.0 W
 ```
 
-## 2. 受控接入
+## 3. 受控接入
 
 点击“模拟端点”下方的 **＋ 接入设备**：
 
@@ -61,7 +85,7 @@ northbound · ready · 演示传感器 · 1 capabilities
 
 新的虚拟端点在模拟端点区域出现。它不是内置设备，右下角有“移除”按钮；点击会发出 `decommission` 事件并撤销绑定。
 
-## 3. CLI Demo
+## 4. CLI Demo
 
 ```bash
 python3 -m southbound intent "把客厅灯调到 35% 并打开窗帘"
@@ -91,7 +115,7 @@ python3 -m southbound decommission demo_sensor --confirm
 
 CLI 使用 `data/commissioned.json` 持久化已授权设备；新进程启动时会恢复。
 
-## 4. MCP Demo
+## 5. MCP Demo
 
 ```bash
 python3 -m pip install -e .
@@ -105,7 +129,7 @@ claude mcp add --scope project southbound -- python3 -m southbound.mcp_server
 - `iot_commission`（`adapter=sim`，`kind=sensor`，`confirm=true`）
 - `iot_decommission`
 
-## 5. 常见问题
+## 6. 常见问题
 
 **面板打不开？** 确认 `8765` 端口没有被占用；服务只绑定 `127.0.0.1`。
 

@@ -1,6 +1,6 @@
 # Protocol & API
 
-版本：`0.6.0`。这是一份面向实现的协议说明：北向 agent 如何调用 Southbound，南向 adapter 如何执行，事件长什么样。
+版本：`0.7.0`。这是一份面向实现的协议说明：北向 agent 如何调用 Southbound，南向 adapter 如何执行，事件长什么样。
 
 ## 1. 两个平面
 
@@ -36,6 +36,10 @@ Wi-Fi / Zigbee / Matter / ESPHome / MQTT
 | GET | `/api/sim/devices` | 虚拟端点状态 |
 | POST | `/api/sim/devices/<id>/action` | 模拟端点动作 |
 | POST | `/api/sim/reset` | 重置模拟器 |
+| GET | `/api/scene/state` | 2.5D 房间快照 |
+| POST | `/api/scene/presence` | 更新 avatar/presence |
+| POST | `/api/scene/automation` | 开/关场景自动模式 |
+| POST | `/api/scene/reset` | 重置房间与模拟器 |
 
 `/api/access/*`、`/api/agent` 是兼容别名。所有响应都是 JSON；SSE 使用 `text/event-stream`。
 
@@ -128,6 +132,46 @@ adapter 专属字段：
 
 响应包含 `device`（DeviceBinding snapshot）、`capabilities`、`adapter`、`ok`。
 
+### scene / presence
+
+2.5D 房间的 presence 输入与场景快照：
+
+```http
+POST /api/scene/presence
+Content-Type: application/json
+
+{"client_id": "demo", "x": 4.2, "y": 3.0}
+```
+
+房间坐标以米为单位，服务端会限制在 `12 × 8` 内；`x >= 7.5` 且 `y < 4` 为卧室，左侧下方为玄关，其余归入客厅/书房。返回的 snapshot 包含：
+
+```json
+{
+  "ok": true,
+  "room": {"width": 12, "depth": 8, "wall_height": 3.2, "zones": []},
+  "placements": [{"device_id": "living_light", "x": 3.4, "y": 2.0, "z": 2.55}],
+  "presence": {"client_id": "demo", "x": 4.2, "y": 3.0, "zone": "living"},
+  "devices": [],
+  "automation": {"enabled": true, "rules": []}
+}
+```
+
+```http
+POST /api/scene/automation
+Content-Type: application/json
+
+{"enabled": false}
+```
+
+```http
+POST /api/scene/reset
+Content-Type: application/json
+
+{}
+```
+
+场景自动模式只执行低风险规则，动作仍然调用 `SouthboundRuntime.call()`，因此经过策略、审计和回读验证。`/scene` 是同一进程内的程序化 2.5D 视图；设备锚点坐标可直接映射到未来的 3DGS 视觉层。
+
 ## 3. 事件
 
 事件由 EventBus 发布，SSE 帧：
@@ -164,6 +208,13 @@ data: {"id":12,"ts":"2026-10-26T17:00:00+08:00","type":"command","plane":"southb
 | `commission.result` | northbound | 接入完成，能力就绪 |
 | `decommission` | southbound | 撤销接入 |
 | `decommission.result` | northbound | 撤销完成 |
+| `presence` | southbound | 房间 avatar/区域信号 |
+| `automation.mode` | northbound | 场景自动模式开关 |
+| `automation.proposed` | northbound | 规则命中，准备执行 |
+| `automation.verified` | northbound | 动作已执行且回读通过 |
+| `automation.failed` | northbound | 动作执行或验证失败 |
+| `agent.notice` | northbound | 给 Agent 的结构化通知/升级 |
+| `scene.reset` | southbound | 房间和模拟器重置 |
 | `reset` | southbound | 模拟器重置 |
 
 ## 4. 数据模型

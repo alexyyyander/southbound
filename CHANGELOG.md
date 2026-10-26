@@ -6,12 +6,28 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-10-26
+
 ### Added
 
+- **2.5D room experiment** at `/scene`: movable avatar, presence zones,
+  clickable devices, automatic low-risk reflex rules, agent notices, SSE
+  event feed, and read-back verification.
+- **Scene API**: `/api/scene/state`, `/api/scene/presence`,
+  `/api/scene/automation`, and `/api/scene/reset`.
+- **SceneController**: deterministic presence/automation layer that still
+  calls `SouthboundRuntime.call()` → `AccessHub`, never a bypass path.
+- Tests: scene presence, automation, cooldown, clamping, reset, and mode
+  coverage (55 tests total).
 - Repository presentation: Southbound logo, GitHub social preview, brand
   guide (`assets/README.md`), and About / Demo / Protocol docs.
 - README logo, badges, documentation navigation, naming note, and
   contribution section; GitHub description and topics.
+
+### Changed
+
+- Version bump to `0.7.0`; 3D Gaussian Splatting is documented as an
+  optional visual layer over the authoritative 2.5D control map.
 
 ## [0.6.0] - 2026-10-26
 
