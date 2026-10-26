@@ -1,7 +1,7 @@
 import unittest
 
-from iot_agent_lab.sim_agent import run_goal
-from iot_agent_lab.simulator import Simulator
+from southbound.sim_agent import run_goal
+from southbound.simulator import Simulator
 
 
 class SimAgentTest(unittest.TestCase):

@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
-"""Unified command line for the IoT agent lab toolchain.
+"""Unified command line for the Southbound toolchain.
 
-iot-lab discover --sweep
-iot-lab scan --sweep
-iot-lab scan --hosts 192.168.1.2,192.168.1.20 --full
-iot-lab agent "哪些设备能跑 agent"
-iot-lab sim "打开客厅灯并关掉书房插座"
-iot-lab demo
-iot-lab mcp
+southbound discover --sweep
+southbound scan --sweep
+southbound scan --hosts 192.168.1.2,192.168.1.20 --full
+southbound agent "哪些设备能跑 agent"
+southbound sim "打开客厅灯并关掉书房插座"
+southbound demo
+southbound mcp
 """
 
 from __future__ import annotations
@@ -149,7 +149,7 @@ def cmd_access(_args: argparse.Namespace) -> int:
 
 
 def cmd_info(_args: argparse.Namespace) -> int:
-    print("IoT agent lab 工具链\n")
+    print("Southbound 工具链\n")
     print("  discover  ARP / SSDP / mDNS 发现与分级")
     print("  scan      端口扫描与服务指纹")
     print("  agent     基于 inventory 的目标问答")
@@ -165,7 +165,7 @@ def cmd_info(_args: argparse.Namespace) -> int:
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        prog="iot-lab", description="IoT agent lab toolchain"
+        prog="southbound", description="Southbound toolchain"
     )
     sub = parser.add_subparsers(dest="command", required=True)
 

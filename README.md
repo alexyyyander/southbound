@@ -1,6 +1,8 @@
-# iot-agent-lab
+# Southbound
 
-一个本地优先的 IoT agent 工具链：发现局域网设备、判断端侧 agent 能力、通过统一的接入工具层控制设备，并在没有硬件时用模拟端点跑通闭环。
+**本地优先的 IoT Agent 南向接入层。** 发现局域网设备、判断端侧 agent 能力、通过统一的接入工具层控制设备，并在没有硬件时用模拟端点跑通闭环。
+
+Southbound 取 IoT/电信架构里的 *southbound interface*：北向接口面向应用与 agent，南向接口面向设备。
 
 - **发现**：ARP + mDNS + SSDP，支持 `/23` 等非 `/24` 网段，mDNS 实例解析到 IP。
 - **分级**：厂商 OUI、服务类型、端口指纹，映射到 T0–T3 agent 档位。
@@ -13,31 +15,31 @@
 ## 快速开始
 
 ```bash
-cd iot-agent-lab
-python3 iotlab.py discover --sweep
+cd southbound
+python3 -m southbound discover --sweep
 ```
 
 ```bash
-python3 iotlab.py sim "打开客厅灯并关掉书房插座"
+python3 -m southbound sim "打开客厅灯并关掉书房插座"
 ```
 
 ```bash
-python3 iotlab.py tools
+python3 -m southbound tools
 ```
 
 ```bash
-python3 iotlab.py call living_light set_brightness --args '{"brightness": 30}'
+python3 -m southbound call living_light set_brightness --args '{"brightness": 30}'
 ```
 
 ```bash
-python3 iotlab.py demo
+python3 -m southbound demo
 ```
 
 面板默认在 `http://127.0.0.1:8765/`。无需安装依赖，Python 3.10+ 即可；也可以：
 
 ```bash
 pip install -e .
-iot-lab demo
+southbound demo
 ```
 
 MQTT 适配器需要可选依赖：
@@ -66,9 +68,9 @@ iot_call(device_id, capability, arguments, confirm)
 示例：
 
 ```bash
-python3 iotlab.py call living_light set_brightness --args '{"brightness": 30}'
-python3 iotlab.py call living_light read
-python3 iotlab.py access
+python3 -m southbound call living_light set_brightness --args '{"brightness": 30}'
+python3 -m southbound call living_light read
+python3 -m southbound access
 ```
 
 MCP 中的对应工具是 `iot_call`；先调用 `iot_tool_catalog` 或 `iot_devices_list` 查看可用能力。
@@ -89,7 +91,7 @@ export HA_TOKEN="..."
 
 ## 可视化面板
 
-`python3 iotlab.py demo` 启动只绑定 `127.0.0.1` 的本地服务：
+`python3 -m southbound demo` 启动只绑定 `127.0.0.1` 的本地服务：
 
 - **网络拓扑**：网关、AP、NAS、打印机、ESP32、Mac 与终端集群，按 T0–T3 着色；点击节点筛选设备。
 - **设备清单**：49 台实测设备的搜索、档位过滤、端口与详情。
@@ -105,23 +107,23 @@ export HA_TOKEN="..."
 
 | 命令 | 作用 |
 |---|---|
-| `iot-lab discover --sweep` | 发现设备并写入 `data/inventory.json` |
-| `iot-lab scan --sweep` | 端口扫描（大网段建议 `--hosts` 定向） |
-| `iot-lab scan --hosts 192.168.1.2,192.168.1.20 --full` | 只扫关键设备 |
-| `iot-lab agent "哪些设备能跑 agent"` | 基于 inventory 的问答与接入方案 |
-| `iot-lab sim "打开客厅灯"` | 对模拟端点执行目标并打印 trace |
-| `iot-lab tools` | 接入层能力目录 |
-| `iot-lab call <device> <capability>` | 通过策略与审计执行能力 |
-| `iot-lab access` | 适配器、策略与审计状态 |
-| `iot-lab demo` | 启动可视化面板 |
-| `iot-lab mcp` | 启动 stdio MCP server |
-| `iot-lab info` | 工具链地图 |
+| `southbound discover --sweep` | 发现设备并写入 `data/inventory.json` |
+| `southbound scan --sweep` | 端口扫描（大网段建议 `--hosts` 定向） |
+| `southbound scan --hosts 192.168.1.2,192.168.1.20 --full` | 只扫关键设备 |
+| `southbound agent "哪些设备能跑 agent"` | 基于 inventory 的问答与接入方案 |
+| `southbound sim "打开客厅灯"` | 对模拟端点执行目标并打印 trace |
+| `southbound tools` | 接入层能力目录 |
+| `southbound call <device> <capability>` | 通过策略与审计执行能力 |
+| `southbound access` | 适配器、策略与审计状态 |
+| `southbound demo` | 启动可视化面板 |
+| `southbound mcp` | 启动 stdio MCP server |
+| `southbound info` | 工具链地图 |
 
 ## 仓库结构
 
 ```
-iot-agent-lab/
-├── iot_agent_lab/
+southbound/
+├── southbound/
 │   ├── cli.py               # 统一 CLI
 │   ├── discover.py          # ARP / mDNS / SSDP
 │   ├── deep_scan.py         # 端口与服务指纹
@@ -150,25 +152,37 @@ iot-agent-lab/
 ├── docs/
 │   ├── ARCHITECTURE.md
 │   ├── ACCESS_LAYER.md
+│   ├── COMPARISON.md
 │   ├── CHIPS.md
 │   ├── SIGNALS.md
 │   ├── HARDWARE.md
 │   └── SCAN_REPORT.md
 ├── tests/
 ├── data/                    # 扫描结果与审计（本地生成，已 gitignore）
-├── iotlab.py                # CLI 兼容入口
 ├── viz_server.py            # 面板兼容入口
 ├── mcp_server.py            # MCP 兼容入口
+├── CHANGELOG.md
+├── CONTRIBUTING.md
+├── SECURITY.md
+├── CODE_OF_CONDUCT.md
+├── LICENSE
+├── .github/workflows/ci.yml
 ├── pyproject.toml
 └── Makefile
 ```
 
 ## MCP
 
-项目包含 `.mcp.json`：
+项目包含 `.mcp.json`，使用模块方式启动（先 `pip install -e .`）：
 
 ```bash
-claude mcp add --scope project iot-lab -- python3 /Users/alexyu/Documents/AI/大肥鱼/iot-agent-lab/mcp_server.py
+claude mcp add --scope project southbound -- python3 -m southbound.mcp_server
+```
+
+如果只在源码目录运行、没有安装，也可以指向兼容入口：
+
+```bash
+claude mcp add --scope project southbound -- python3 /path/to/southbound/mcp_server.py
 ```
 
 工具：
@@ -185,17 +199,28 @@ claude mcp add --scope project iot-lab -- python3 /Users/alexyu/Documents/AI/大
 make test
 ```
 
-当前 20 项标准库测试覆盖分级规则、模拟器、agent 目标拆分、能力校验、策略、审计和工具目录。
+当前 35 项标准库测试覆盖分级规则、模拟器、agent 目标拆分、能力校验、策略、审计、工具目录、HA 适配器映射、MQTT payload 和 CLI 解析。
 
 ## 文档
 
 - [文档索引](docs/README.md)
 - [技术架构与可行性](docs/ARCHITECTURE.md)
 - [接入工具层](docs/ACCESS_LAYER.md)
+- [同类项目与定位](docs/COMPARISON.md)
 - [端侧芯片能力](docs/CHIPS.md)
 - [数据信号采集](docs/SIGNALS.md)
 - [最小采购与刷机清单](docs/HARDWARE.md)
 - [最近一次局域网扫描报告](docs/SCAN_REPORT.md)
+
+## 项目治理
+
+- [许可证 (MIT)](LICENSE)
+- [贡献指南](CONTRIBUTING.md)
+- [安全策略](SECURITY.md)
+- [行为准则](CODE_OF_CONDUCT.md)
+- [变更日志](CHANGELOG.md)
+
+CI 在 Python 3.10–3.13 上跑 `ruff check .`、单元测试和构建 wheel/sdist。
 
 ## 边界
 

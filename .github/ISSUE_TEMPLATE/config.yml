@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Security policy
+    url: https://github.com/alexyyyander/southbound/security/policy
+    about: Please report vulnerabilities privately, not in a public issue.
+  - name: Access layer guide
+    url: https://github.com/alexyyyander/southbound/blob/main/docs/ACCESS_LAYER.md
+    about: Read the adapter, policy, and audit contracts before proposing changes.

@@ -1,6 +1,6 @@
 import unittest
 
-from iot_agent_lab.simulator import Simulator
+from southbound.simulator import Simulator
 
 
 class SimulatorTest(unittest.TestCase):

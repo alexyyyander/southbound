@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Local dashboard server for the IoT agent lab demo.
+"""Local dashboard server for the Southbound demo.
 
 Serves the static dashboard plus three JSON surfaces:
 
@@ -20,7 +20,6 @@ import json
 import mimetypes
 import webbrowser
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-from pathlib import Path
 from urllib.parse import unquote, urlparse
 
 from .access import build_hub
@@ -78,7 +77,7 @@ def _load_json(name: str) -> dict:
 
 
 class Handler(BaseHTTPRequestHandler):
-    server_version = "IoTLabDemo/0.2"
+    server_version = "SouthboundDemo/0.4"
 
     def log_message(self, fmt: str, *args) -> None:  # keep stdout clean
         print(f"[viz] {self.address_string()} {fmt % args}", flush=True)
@@ -224,7 +223,7 @@ def serve(
 ) -> None:
     server = ThreadingHTTPServer((host, port), Handler)
     url = f"http://{host}:{port}/"
-    print(f"IoT agent lab demo running at {url}", flush=True)
+    print(f"Southbound demo running at {url}", flush=True)
     if open_browser:
         webbrowser.open(url)
     try:
@@ -236,7 +235,7 @@ def serve(
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Serve the IoT agent lab dashboard")
+    parser = argparse.ArgumentParser(description="Serve the Southbound dashboard")
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--port", type=int, default=8765)
     parser.add_argument(

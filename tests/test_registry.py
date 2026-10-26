@@ -1,6 +1,6 @@
 import unittest
 
-from iot_agent_lab.registry import classify
+from southbound.registry import classify
 
 
 class RegistryTest(unittest.TestCase):

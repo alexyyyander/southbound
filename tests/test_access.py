@@ -2,21 +2,21 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from iot_agent_lab.access import AccessHub, AuditLog, PolicyConfig, PolicyEngine
-from iot_agent_lab.access.adapters.sim import SimAdapter
-from iot_agent_lab.access.capabilities import (
+from southbound.access import AccessHub, AuditLog, PolicyConfig, PolicyEngine
+from southbound.access.adapters.sim import SimAdapter
+from southbound.access.capabilities import (
     build_catalog,
     capability_for,
     validate_arguments,
 )
-from iot_agent_lab.access.errors import (
+from southbound.access.errors import (
     PolicyDenied,
     UnknownCapability,
     UnknownDevice,
     ValidationError,
 )
-from iot_agent_lab.access.models import DeviceBinding, Risk
-from iot_agent_lab.simulator import Simulator
+from southbound.access.models import DeviceBinding, Risk
+from southbound.simulator import Simulator
 
 
 def make_hub(mode: str = "supervised", allow_high_risk: bool = False, audit_path=None):
@@ -110,7 +110,6 @@ class AccessLayerTest(unittest.TestCase):
         self.assertTrue(autonomous.allowed)
 
     def test_catalog_schema(self) -> None:
-        hub = make_hub()
         catalog = build_catalog(
             [
                 DeviceBinding(

@@ -110,6 +110,8 @@ class HomeAssistantAdapter(DeviceAdapter):
 
     def _service_for(self, kind: str, capability: str) -> tuple[str, str]:
         if kind == "light":
+            if capability == "set_brightness":
+                return "light", "turn_on"
             return "light", capability
         if kind == "plug":
             return "switch", capability

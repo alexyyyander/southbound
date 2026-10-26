@@ -6,7 +6,7 @@ stdin/stdout, which is what MCP clients use for stdio servers.
 
 Register with Claude Code:
 
-    claude mcp add iot-lab -- python3 /path/to/iot-agent-lab/mcp_server.py
+    claude mcp add southbound -- python3 /path/to/southbound/mcp_server.py
 
 Tools:
     lan_inventory    discover devices and classify them
@@ -43,8 +43,8 @@ from .simulator import Simulator
 SIM = Simulator()
 HUB = build_hub(simulator=SIM)
 
-SERVER_NAME = "iot-agent-lab"
-SERVER_VERSION = "0.1.0"
+SERVER_NAME = "southbound"
+SERVER_VERSION = "0.4.0"
 DEFAULT_PROTOCOL = "2024-11-05"
 
 TOOLS = [

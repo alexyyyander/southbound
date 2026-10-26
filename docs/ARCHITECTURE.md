@@ -29,7 +29,7 @@
    inventory 问答 / 方案      stdio MCP（13 tools）        HTTP API + 可视化面板
             │                           │                           │
             └───────────────┬───────────┘                           ▼
-                            ▼                                 iot_agent_lab/web/
+                            ▼                                 southbound/web/
                    外部 LLM / MCP 客户端                     index.html / app.js / styles.css
                             │
                             ▼
@@ -47,18 +47,18 @@
   simulator.py（六个虚拟端点）
 ```
 
-统一入口是 `iotlab.py`（安装后命令为 `iot-lab`）：
+统一入口是 `python3 -m southbound`（安装后命令为 `southbound`）：
 
 ```bash
-iot-lab discover --sweep
-iot-lab scan --sweep
-iot-lab agent "哪些设备能跑 agent"
-iot-lab sim "打开客厅灯并关掉书房插座"
-iot-lab tools
-iot-lab call living_light set_brightness --args '{"brightness": 30}'
-iot-lab access
-iot-lab demo
-iot-lab mcp
+southbound discover --sweep
+southbound scan --sweep
+southbound agent "哪些设备能跑 agent"
+southbound sim "打开客厅灯并关掉书房插座"
+southbound tools
+southbound call living_light set_brightness --args '{"brightness": 30}'
+southbound access
+southbound demo
+southbound mcp
 ```
 
 ## 3. 组件职责
@@ -73,11 +73,11 @@ iot-lab mcp
 | `sim_agent.py` | 目标拆分 → 设备匹配 → 动作 → 回读，输出可展示的 trace | 可用 |
 | `viz_server.py` | 本地面板 HTTP API，绑定 `127.0.0.1`；模拟器操作与 agent demo 经 AccessHub | 可用 |
 | `mcp_server.py` | stdio MCP，13 个工具：发现、深扫、模拟器、接入层 | 可用 |
-| `cli.py` / `iotlab.py` | 统一 CLI，含 `tools` / `call` / `access` | 可用 |
+| `cli.py` | 统一 CLI，含 `tools` / `call` / `access` | 可用 |
 | `access/` | 设备/能力模型、参数校验、策略、审计、AccessHub、四类 adapter | 可用 |
 | `config/access.example.json` | HA / MQTT / Zigbee2MQTT 配置示例 | 可用 |
-| `iot_agent_lab/web/` | 观测站风格可视化面板 | 可用 |
-| `tests/` | 标准库 unittest，覆盖分级、模拟闭环、接入层策略与审计 | 20 项通过 |
+| `southbound/web/` | 观测站风格可视化面板 | 可用 |
+| `tests/` | 标准库 unittest，覆盖分级、模拟闭环、接入层策略与审计 | 35 项通过 |
 
 ### 接入工具层
 

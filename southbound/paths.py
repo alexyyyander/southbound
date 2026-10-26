@@ -2,7 +2,7 @@
 
 Source checkout layout:
 
-    <repo>/iot_agent_lab/...   code + web assets
+    <repo>/southbound/...   code + web assets
     <repo>/data/                generated inventories and audit log
     <repo>/config/              access-layer configuration
     <repo>/docs/                human documentation

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""LAN inventory collector for the IoT agent lab.
+"""LAN inventory collector for the Southbound.
 
 Collects, using only local-network metadata:
 
@@ -29,7 +29,7 @@ from datetime import datetime
 from pathlib import Path
 
 from .paths import DATA_DIR
-from .registry import TIER_INFO, classify, vendor_of
+from .registry import classify, vendor_of
 
 DEFAULT_OUT = DATA_DIR / "inventory.json"
 
@@ -194,9 +194,7 @@ def _parse_ssdp(data: bytes) -> dict[str, str]:
 
 def _fetch_upnp(location: str, timeout: float = 1.8) -> dict:
     try:
-        req = urllib.request.Request(
-            location, headers={"User-Agent": "iot-agent-lab/0.1"}
-        )
+        req = urllib.request.Request(location, headers={"User-Agent": "southbound/0.4"})
         with urllib.request.urlopen(req, timeout=timeout) as resp:
             raw = resp.read(256 * 1024)
         root = ET.fromstring(raw)

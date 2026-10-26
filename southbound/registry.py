@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Device classification heuristics for the IoT agent lab.
+"""Device classification heuristics for the Southbound.
 
 The goal is not precise fingerprinting: it is to answer two practical
 questions for every device seen on the LAN:
@@ -99,7 +99,7 @@ def _parse_oui_csv(path: Path) -> dict[str, str]:
 def _download_oui(path: Path) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp = path.with_suffix(".tmp")
-    req = urllib.request.Request(OUI_URL, headers={"User-Agent": "iot-agent-lab/0.1"})
+    req = urllib.request.Request(OUI_URL, headers={"User-Agent": "southbound/0.4"})
     with urllib.request.urlopen(req, timeout=12) as resp, tmp.open("wb") as out:
         while True:
             chunk = resp.read(1024 * 256)

@@ -3,23 +3,58 @@ requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "iot-agent-lab"
-version = "0.3.0"
-description = "Local-first LAN observatory, access layer, simulator, and agent toolchain"
+name = "southbound"
+version = "0.4.0"
+description = "Local-first southbound access layer for IoT agents"
 readme = "README.md"
 requires-python = ">=3.10"
-license = { text = "MIT" }
+license = { file = "LICENSE" }
+authors = [{ name = "Alex Yu" }]
+keywords = [
+  "iot",
+  "mcp",
+  "home-automation",
+  "local-first",
+  "matter",
+  "zigbee",
+  "esp32",
+  "ai-agents",
+]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Intended Audience :: Developers",
+  "License :: OSI Approved :: MIT License",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Topic :: Home Automation",
+  "Topic :: System :: Networking",
+  "Topic :: Software Development :: Libraries :: Application Frameworks",
+]
 dependencies = []
 
 [project.optional-dependencies]
 mqtt = ["paho-mqtt>=2.0"]
+dev = ["build>=1.2", "ruff>=0.6"]
 
 [project.scripts]
-iot-lab = "iot_agent_lab.cli:main"
+southbound = "southbound.cli:main"
+
+[project.urls]
+Repository = "https://github.com/alexyyyander/southbound"
 
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["iot_agent_lab*"]
+include = ["southbound*"]
 
 [tool.setuptools.package-data]
-iot_agent_lab = ["web/*"]
+southbound = ["web/*", "py.typed"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E4", "E7", "E9", "F"]

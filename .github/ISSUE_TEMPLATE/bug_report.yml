@@ -1,0 +1,58 @@
+name: Bug report
+description: Report a reproducible defect
+title: "[bug] "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting. Please remove tokens, credentials, and personal
+        network data from logs before posting.
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: A clear description of the defect.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: How to reproduce
+      description: Commands, configuration, and the smallest reliable steps.
+      placeholder: |
+        1. python -m southbound ...
+        2. ...
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Version or commit
+      placeholder: "0.4.0 / b7b23e5"
+  - type: dropdown
+    id: component
+    attributes:
+      label: Area
+      options:
+        - access layer
+        - MCP server
+        - dashboard
+        - discovery / scan
+        - simulator
+        - docs / packaging
+    validations:
+      required: true
+  - type: checkboxes
+    id: safety
+    attributes:
+      label: Safety confirmation
+      options:
+        - label: I tested only on networks and devices I own or am authorized to operate.
+          required: true

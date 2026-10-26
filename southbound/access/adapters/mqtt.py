@@ -3,7 +3,7 @@
 MQTT is the lowest-common-denominator integration for ESPHome/Tasmota and
 Zigbee2MQTT. paho-mqtt is optional:
 
-    pip install "iot-agent-lab[mqtt]"
+    pip install "southbound[mqtt]"
 
 Without it, the adapter reports unavailable and contributes no bindings.
 """
@@ -35,7 +35,7 @@ class MqttAdapter(DeviceAdapter):
         username: str | None = None,
         password: str | None = None,
         devices: list[dict[str, Any]] | None = None,
-        client_id: str = "iot-agent-lab",
+        client_id: str = "southbound",
         timeout: float = 4.0,
     ) -> None:
         self.host = host
@@ -146,7 +146,7 @@ class MqttAdapter(DeviceAdapter):
     def _ensure_client(self) -> None:
         if mqtt is None:
             raise AdapterUnavailable(
-                "paho-mqtt 未安装；运行 pip install 'iot-agent-lab[mqtt]'"
+                "paho-mqtt 未安装；运行 pip install 'southbound[mqtt]'"
             )
         if self._client is not None:
             return
@@ -219,6 +219,6 @@ class Zigbee2MqttAdapter(MqttAdapter):
             username=username,
             password=password,
             devices=normalized,
-            client_id="iot-agent-lab-z2m",
+            client_id="southbound-z2m",
             timeout=timeout,
         )

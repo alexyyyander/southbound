@@ -25,13 +25,13 @@
 
 代码位置：
 
-- `iot_agent_lab/access/models.py` — `DeviceBinding`、`Capability`、`Risk`
-- `iot_agent_lab/access/capabilities.py` — 能力定义、参数校验、工具目录
-- `iot_agent_lab/access/policy.py` — 策略引擎
-- `iot_agent_lab/access/audit.py` — JSONL 审计
-- `iot_agent_lab/access/hub.py` — 统一执行入口
-- `iot_agent_lab/access/adapters/` — 协议适配器
-- `iot_agent_lab/access/config.py` — 从 JSON 配置装配 adapter 与 policy
+- `southbound/access/models.py` — `DeviceBinding`、`Capability`、`Risk`
+- `southbound/access/capabilities.py` — 能力定义、参数校验、工具目录
+- `southbound/access/policy.py` — 策略引擎
+- `southbound/access/audit.py` — JSONL 审计
+- `southbound/access/hub.py` — 统一执行入口
+- `southbound/access/adapters/` — 协议适配器
+- `southbound/access/config.py` — 从 JSON 配置装配 adapter 与 policy
 
 ## 2. 核心模型
 
@@ -201,7 +201,7 @@ cp config/access.example.json config/access.local.json
 
 ### MCP
 
-`iot-lab mcp` 暴露：
+`southbound mcp` 暴露：
 
 | 工具 | 作用 |
 |---|---|
@@ -225,15 +225,15 @@ cp config/access.example.json config/access.local.json
 ### CLI
 
 ```bash
-python3 iotlab.py tools
-python3 iotlab.py call living_light set_brightness --args '{"brightness": 30}'
-python3 iotlab.py access
+python3 -m southbound tools
+python3 -m southbound call living_light set_brightness --args '{"brightness": 30}'
+python3 -m southbound access
 ```
 
 高风险动作：
 
 ```bash
-python3 iotlab.py call ha:lock.front_door unlock --confirm
+python3 -m southbound call ha:lock.front_door unlock --confirm
 ```
 
 （还需要 policy 开启 `allow_high_risk`，否则仍会被拒绝。）
