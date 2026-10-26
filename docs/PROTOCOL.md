@@ -41,8 +41,10 @@ Wi-Fi / Zigbee / Matter / ESPHome / MQTT
 
 ### intent
 
-```json
+```http
 POST /api/northbound/intent
+Content-Type: application/json
+
 {"goal": "打开客厅灯并关掉书房插座"}
 ```
 
@@ -62,8 +64,10 @@ POST /api/northbound/intent
 
 ### call
 
-```json
+```http
 POST /api/northbound/call
+Content-Type: application/json
+
 {
   "device_id": "living_light",
   "capability": "set_brightness",
@@ -98,8 +102,10 @@ POST /api/northbound/call
 
 ### commission
 
-```json
+```http
 POST /api/northbound/commission
+Content-Type: application/json
+
 {
   "adapter": "sim",
   "device_id": "demo_sensor",
@@ -201,6 +207,7 @@ data: {"id":12,"ts":"2026-10-26T17:00:00+08:00","type":"command","plane":"southb
   "name": "light.set_brightness",
   "kind": "light",
   "capability": "set_brightness",
+  "description": "设置亮度并打开灯",
   "risk": "low",
   "parameters": {"brightness": {"type": "integer", "minimum": 1, "maximum": 100}},
   "required": ["brightness"],

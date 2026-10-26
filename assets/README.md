@@ -5,7 +5,7 @@
 | File | Use |
 |---|---|
 | `logo.svg` | README, docs, vector use |
-| `logo.png` | GitHub repository avatar (建议 512×512) |
+| `logo.png` | 项目图标、幻灯片、组织/用户头像候选（512×512） |
 | `social-preview.png` | GitHub Social preview (1280×640) |
 
 ## Colors
@@ -27,7 +27,7 @@
 ## GitHub setup
 
 1. Repository **Settings → General → Social preview**：上传 `assets/social-preview.png`。
-2. Repository avatar：上传 `assets/logo.png`。
+2. GitHub 个人仓库没有独立的 repository avatar，仓库卡片使用 owner 头像；如果迁到组织，可以用 `logo.png` 作为组织头像。
 3. Description：`Southbound: local-first IoT access layer for agents.`
 4. Topics：`iot`, `mcp`, `home-automation`, `local-first`, `matter`, `zigbee`, `esp32`, `ai-agents`, `smart-home`.
 
