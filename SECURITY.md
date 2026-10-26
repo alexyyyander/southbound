@@ -4,8 +4,8 @@
 
 | Version | Supported |
 |---|---|
-| 0.5.x | Yes |
-| < 0.5 | No |
+| 0.6.x | Yes |
+| < 0.6 | No |
 
 ## Reporting a vulnerability
 
@@ -29,6 +29,10 @@ Southbound is a local-first tool, not a hardened remote control service.
 - Discovery and scanning are intended for networks you own or are authorized
   to operate.
 - Device access goes through `AccessHub`, which applies policy and audit.
+- Commissioning a new device requires explicit owner confirmation; the
+  runtime never scans for default credentials or self-propagates.
+- Commission records in `data/commissioned.json` contain connection metadata
+  only, never tokens or passwords.
 - High-risk capabilities (locks, mains power, gas) are denied by default and
   require explicit policy enablement plus confirmation.
 - Configuration tokens must come from environment variables, never from

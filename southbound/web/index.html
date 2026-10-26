@@ -153,7 +153,10 @@
           <p>六个虚拟设备，覆盖 Matter / MQTT / Zigbee。</p>
         </div>
         <div id="sim-devices" class="sim-grid" aria-live="polite"></div>
-        <button id="sim-reset" class="text-button" type="button">重置模拟状态</button>
+        <div class="bench__actions">
+          <button id="onboard-open" class="text-button" type="button">＋ 接入设备</button>
+          <button id="sim-reset" class="text-button" type="button">重置模拟状态</button>
+        </div>
       </section>
 
       <section class="panel fleet" aria-labelledby="fleet-title">
@@ -188,6 +191,85 @@
         </div>
       </section>
     </main>
+
+    <dialog id="onboard-dialog" class="onboard">
+      <form id="onboard-form">
+        <div class="onboard__head">
+          <h2>接入新设备</h2>
+          <button type="button" id="onboard-close" class="text-button">关闭</button>
+        </div>
+        <p class="small">受控 onboarding：确认后才会创建 DeviceBinding、绑定 adapter、写入审计，并把能力加入 Tool Catalog。</p>
+        <div class="onboard__grid">
+          <label>Adapter
+            <select id="onboard-adapter" name="adapter">
+              <option value="sim">sim（虚拟设备）</option>
+              <option value="home_assistant">home_assistant</option>
+              <option value="zigbee2mqtt">zigbee2mqtt</option>
+              <option value="mqtt">mqtt</option>
+            </select>
+          </label>
+          <label>Device ID
+            <input name="device_id" placeholder="留空自动生成">
+          </label>
+          <label>名称
+            <input name="name" value="演示传感器">
+          </label>
+          <label>类型
+            <select name="kind">
+              <option value="sensor">sensor</option>
+              <option value="light">light</option>
+              <option value="plug">plug</option>
+              <option value="cover">cover</option>
+              <option value="binary_sensor">binary_sensor</option>
+              <option value="purifier">purifier</option>
+              <option value="thermostat">thermostat</option>
+              <option value="lock">lock</option>
+            </select>
+          </label>
+          <label>房间
+            <input name="room" value="客厅">
+          </label>
+          <label>协议
+            <input name="protocol" value="Virtual">
+          </label>
+          <label>Tier
+            <select name="tier">
+              <option value="T0">T0</option>
+              <option value="T1" selected>T1</option>
+              <option value="T2">T2</option>
+              <option value="T3">T3</option>
+            </select>
+          </label>
+          <label>Capabilities
+            <input name="capabilities" value="read" placeholder="read,turn_on,set_brightness">
+          </label>
+          <label data-field="entity_id">HA entity id
+            <input name="entity_id" placeholder="light.living_room">
+          </label>
+          <label data-field="friendly_name">Z2M friendly name
+            <input name="friendly_name" placeholder="living_plug">
+          </label>
+          <label data-field="command_topic">MQTT command topic
+            <input name="command_topic" placeholder="demo/set">
+          </label>
+          <label data-field="state_topic">MQTT state topic
+            <input name="state_topic" placeholder="demo/state">
+          </label>
+          <label class="onboard__wide" data-field="state">Sim state JSON
+            <textarea name="state" rows="2">{"temperature":22.5,"humidity":45,"battery":90}</textarea>
+          </label>
+        </div>
+        <label class="onboard__check">
+          <input type="checkbox" name="confirm" checked>
+          我确认接入这台设备，并允许 Southbound 在策略范围内控制它
+        </label>
+        <p id="onboard-error" class="onboard__error" hidden></p>
+        <div class="onboard__actions">
+          <button type="button" id="onboard-cancel" class="text-button">取消</button>
+          <button type="submit" class="onboard__submit">确认接入</button>
+        </div>
+      </form>
+    </dialog>
 
     <footer class="footer">
       <p>扫描与接入仅限自有或获授权网络。模拟端点不连接真实设备；所有状态只在本机内存中。</p>

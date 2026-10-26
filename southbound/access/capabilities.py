@@ -124,6 +124,19 @@ def capability_for(kind: str, name: str) -> Capability | None:
     return CAPABILITIES.get(kind, {}).get(name)
 
 
+def commissioned_capabilities(
+    kind: str, requested: Iterable[str] | None = None
+) -> list[Capability]:
+    """Least-privilege default: high-risk capabilities need an explicit request."""
+    if requested is not None:
+        return capabilities_for(kind, requested)
+    return [
+        capability
+        for capability in capabilities_for(kind)
+        if capability.risk is not Risk.HIGH
+    ]
+
+
 def validate_arguments(
     capability: Capability, arguments: dict[str, Any] | None
 ) -> dict[str, Any]:

@@ -8,6 +8,7 @@ Public surface:
 """
 
 from .audit import AuditLog
+from .commissioning import CommissionStore
 from .capabilities import (
     CAPABILITIES,
     build_catalog,
@@ -36,6 +37,7 @@ __all__ = [
     "PolicyConfig",
     "Decision",
     "AuditLog",
+    "CommissionStore",
     "build_hub",
     "load_config",
     "CAPABILITIES",

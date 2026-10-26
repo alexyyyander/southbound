@@ -13,7 +13,7 @@ import urllib.parse
 import urllib.request
 from typing import Any
 
-from ..capabilities import capabilities_for
+from ..capabilities import capabilities_for, commissioned_capabilities
 from ..errors import AdapterUnavailable
 from ..models import Capability, DeviceBinding
 from .base import DeviceAdapter
@@ -42,36 +42,76 @@ class HomeAssistantAdapter(DeviceAdapter):
         self.timeout = timeout
 
     def available(self) -> bool:
-        return bool(self.base_url and self.token and self.devices)
+        return bool(self.base_url and self.token)
+
+    def _binding_for(
+        self, item: dict[str, Any], commissioned: bool = False
+    ) -> DeviceBinding:
+        entity_id = item.get("entity_id")
+        device_id = item.get("device_id")
+        kind = item.get("kind", "light")
+        return DeviceBinding(
+            device_id=device_id,
+            name=item.get("name", entity_id),
+            kind=kind,
+            room=item.get("room", ""),
+            protocol=item.get("protocol", "Home Assistant"),
+            tier=item.get("tier", "T2"),
+            adapter=self.name,
+            address={"entity_id": entity_id},
+            capabilities=capabilities_for(kind, item.get("capabilities")),
+            metadata={
+                "source": "home_assistant",
+                "safe_to_automate": bool(item.get("safe_to_automate", False)),
+                "commissioned": commissioned,
+            },
+        )
 
     def bindings(self) -> list[DeviceBinding]:
         if not self.available():
             return []
-        bindings: list[DeviceBinding] = []
-        for item in self.devices:
-            entity_id = item.get("entity_id")
-            device_id = item.get("device_id")
-            kind = item.get("kind", "light")
-            if not entity_id or not device_id:
-                continue
-            bindings.append(
-                DeviceBinding(
-                    device_id=device_id,
-                    name=item.get("name", entity_id),
-                    kind=kind,
-                    room=item.get("room", ""),
-                    protocol=item.get("protocol", "Home Assistant"),
-                    tier=item.get("tier", "T2"),
-                    adapter=self.name,
-                    address={"entity_id": entity_id},
-                    capabilities=capabilities_for(kind, item.get("capabilities")),
-                    metadata={
-                        "source": "home_assistant",
-                        "safe_to_automate": bool(item.get("safe_to_automate", False)),
-                    },
-                )
-            )
-        return bindings
+        return [
+            self._binding_for(item)
+            for item in self.devices
+            if item.get("entity_id") and item.get("device_id")
+        ]
+
+    def add_device(self, config: dict[str, Any]) -> DeviceBinding:
+        if not self.available():
+            raise AdapterUnavailable("Home Assistant adapter 未配置 base_url/token")
+        entity_id = str(config.get("entity_id") or "").strip()
+        if not entity_id:
+            raise ValueError("entity_id is required")
+        kind = str(config.get("kind") or "sensor")
+        capabilities = commissioned_capabilities(kind, config.get("capabilities"))
+        item = {
+            **config,
+            "device_id": str(config.get("device_id") or f"ha:{entity_id}"),
+            "entity_id": entity_id,
+            "kind": kind,
+            "capabilities": [capability.name for capability in capabilities],
+        }
+        self.verify_device(item)
+        self.devices.append(item)
+        return self._binding_for(item, commissioned=True)
+
+    def verify_device(self, config: dict[str, Any]) -> None:
+        entity_id = str(config.get("entity_id") or "").strip()
+        if not entity_id:
+            raise ValueError("entity_id is required")
+        data = self._request(
+            "GET", f"/api/states/{urllib.parse.quote(entity_id, safe='')}"
+        )
+        if data.get("state") == "unavailable":
+            raise AdapterUnavailable(f"Home Assistant entity unavailable: {entity_id}")
+
+    def remove_device(self, device_id: str) -> None:
+        before = len(self.devices)
+        self.devices = [
+            item for item in self.devices if item.get("device_id") != device_id
+        ]
+        if len(self.devices) == before:
+            raise ValueError(f"device not commissioned: {device_id}")
 
     def call(
         self,

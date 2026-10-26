@@ -26,7 +26,7 @@
             ┌───────────────────────────┼───────────────────────────┐
             ▼                           ▼                           ▼
       agent.py                  mcp_server.py                viz_server.py
-   inventory 问答 / 方案      stdio MCP（13 tools）        HTTP API + 可视化面板
+   inventory 问答 / 方案      stdio MCP（15 tools）        HTTP API + 可视化面板
             │                           │                           │
             └───────────────┬───────────┘                           ▼
                             ▼                                 southbound/web/
@@ -75,13 +75,14 @@ southbound mcp
 | `simulator.py` | 六个虚拟设备（灯、插座、温湿度、窗帘、门磁、净化器），三种协议 | 可用 |
 | `sim_agent.py` | 目标拆分 → 设备匹配 → 动作 → 回读，输出可展示的 trace | 可用 |
 | `viz_server.py` | 本地面板 HTTP API，绑定 `127.0.0.1`；模拟器操作与 agent demo 经 AccessHub | 可用 |
-| `runtime.py` | SouthboundRuntime + EventBus：northbound intent/call、southbound adapter 管线、SSE 事件流 | 可用 |
-| `mcp_server.py` | stdio MCP，13 个工具：发现、深扫、模拟器、接入层 | 可用 |
-| `cli.py` | 统一 CLI，含 `tools` / `call` / `access` | 可用 |
-| `access/` | 设备/能力模型、参数校验、策略、审计、AccessHub、四类 adapter | 可用 |
+| `runtime.py` | SouthboundRuntime + EventBus：northbound intent/call、受控 onboarding、southbound adapter 管线、SSE 事件流 | 可用 |
+| `mcp_server.py` | stdio MCP，15 个工具：发现、深扫、模拟器、接入层、受控 onboarding | 可用 |
+| `cli.py` | 统一 CLI，含 `tools` / `call` / `onboard` / `decommission` / `access` | 可用 |
+| `access/` | 设备/能力模型、参数校验、策略、审计、AccessHub、受控接入、四类 adapter | 可用 |
+| `access/commissioning.py` | 已授权设备的非敏感持久化记录与启动恢复 | 可用 |
 | `config/access.example.json` | HA / MQTT / Zigbee2MQTT 配置示例 | 可用 |
 | `southbound/web/` | 观测站风格可视化面板 | 可用 |
-| `tests/` | 标准库 unittest，覆盖分级、模拟闭环、接入层策略与审计、运行时/事件总线 | 40 项通过 |
+| `tests/` | 标准库 unittest，覆盖分级、模拟闭环、接入层策略与审计、运行时/事件总线、受控接入 | 46 项通过 |
 
 ### 接入工具层
 
@@ -104,7 +105,8 @@ southbound mcp
 - **southbound**：由 `AccessHub` 选择 adapter 并执行；
 - **EventBus**：每次执行发出 `intent`、`command`（southbound/down）、`state`（northbound/up）和 `intent.result` 事件；
 - **SSE**：`GET /api/events` 实时推送，`GET /api/events/recent?since=` 支持重放；
-- **面板 flowbar**：Agent → Southbound → Devices 的实时脉冲与最新事件。
+- **面板 flowbar**：Agent → Southbound → Devices 的实时脉冲与最新事件；
+- **受控 onboarding**：`commission()` / `decommission()` 执行发现→授权→绑定→工具目录；`confirm` 与策略把“扩散”限制为受控接入，而不是自我复制。
 
 运行时目前是进程内的。Dashboard、CLI、MCP 各自嵌入一个；需要多客户端共享状态时，下一阶段可以把同一组 HTTP 端点抽成独立 service。
 
@@ -197,6 +199,7 @@ southbound mcp
 | 设备指纹 | 端口 + banner + OUI | 中高 | 随机 MAC、厂商私有协议、设备休眠 | 足够做接入规划；精确识别需 DHCP/DHCPv6 租约 |
 | T0–T3 分级 | 规则引擎 | 中 | 未知厂商、型号歧义 | 作为规划启发式可用，需标注置信度 |
 | 接入工具层 | AccessHub + 四类 adapter | 高 | 真实设备鉴权、协议差异 | 模型/策略/审计/目录已完成；协议执行按 adapter 扩展 |
+| 受控 onboarding | commission / decommission + 持久化 | 高 | 真实配对、隔离区、审批 UI | 受控接入已跑通；自动扩散明确不做 |
 | 运行时与事件流 | SouthboundRuntime + EventBus + SSE | 高 | 跨进程一致性、背压 | 单进程闭环已跑通；独立 service 是下一步 |
 | ESP32 / ESPHome 控制 | Sim 完整；真实设备经 HA/MQTT adapter | 高（有硬件） | 刷机、引脚、供电 | 最小闭环最成熟的一条路 |
 | Matter 控制 | 经 HomeAssistantAdapter | 中高 | 需 Matter Server + 蓝牙配网 | 标准协议，长期成本最低 |
@@ -205,7 +208,7 @@ southbound mcp
 | LLM planner | 确定性 sim_agent + 工具目录 | 中高 | 工具调用可靠性、延迟、幻觉 | 3B 以上可用；必须保留策略与审计 |
 | “所有硬件”完整自主 | 不支持 | 低（字面） | 凭据、覆盖率、安全 | 预接入集合内可达 L3；全网无授权接管不可行 |
 | 可视化 | 已实现 | 高 | 数据新鲜度 | 适合观测与演示 |
-| MCP 外部 agent | 已实现（13 tools） | 高 | 客户端批准、权限 | 工具边界清晰，可逐步扩展 |
+| MCP 外部 agent | 已实现（15 tools） | 高 | 客户端批准、权限 | 工具边界清晰，可逐步扩展 |
 | 安全关键控制 | 策略/审计已实现，硬件未验证 | 中 | 门锁/电源/燃气的现场验证 | 工具层已强制高风险门；仍需现场演练 |
 
 ## 7. 关键架构决策
@@ -231,7 +234,7 @@ southbound mcp
 ## 9. 路线图
 
 - **P0 发现与分级（已完成）**：ARP/mDNS/SSDP、深扫、OUI、T0–T3、MCP。
-- **P1 无硬件闭环与接入层（已完成）**：六设备模拟器、确定性 agent trace、可视化面板、统一 CLI、接入工具层（模型/策略/审计/四类 adapter）、SouthboundRuntime/EventBus/SSE、测试。
+- **P1 无硬件闭环与接入层（已完成）**：六设备模拟器、确定性 agent trace、可视化面板、统一 CLI、接入工具层（模型/策略/审计/四类 adapter）、SouthboundRuntime/EventBus/SSE、受控 onboarding/commissioning、测试。
 - **P2 第一条真实链路**：ESP32-S3 + ESPHome + 一个 Matter Wi-Fi 插座；HA/MQTT 落在 NAS；先经 HA/MQTT adapter 接入。
 - **P3 Zigbee 与事件流**：SLZB-06 + zigbee2mqtt；把轮询改成 MQTT 事件订阅。
 - **P4 LLM planner**：在 sim_agent 的工具层上接本地 3B 模型；加策略引擎、审计与回滚。

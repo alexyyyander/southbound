@@ -31,11 +31,12 @@ import webbrowser
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, unquote, urlparse
 
+from .access.commissioning import CommissionStore
 from .access.errors import AccessError
 from .paths import DATA_DIR, WEB_DIR
 from .runtime import SouthboundRuntime
 
-RUNTIME = SouthboundRuntime()
+RUNTIME = SouthboundRuntime(store=CommissionStore(DATA_DIR / "commissioned.json"))
 SIM = RUNTIME.simulator
 HUB = RUNTIME.hub
 
@@ -51,7 +52,7 @@ def _load_json(name: str) -> dict:
 
 
 class Handler(BaseHTTPRequestHandler):
-    server_version = "SouthboundDemo/0.5"
+    server_version = "SouthboundDemo/0.6"
 
     def log_message(self, fmt: str, *args) -> None:  # keep stdout clean
         print(f"[viz] {self.address_string()} {fmt % args}", flush=True)
@@ -109,6 +110,43 @@ class Handler(BaseHTTPRequestHandler):
         if path in ("/api/agent", "/api/northbound/intent"):
             goal = str(body.get("goal", "")).strip()
             self._json(RUNTIME.intent(goal))
+            return
+        if path in ("/api/northbound/commission", "/api/access/commission"):
+            try:
+                result = RUNTIME.commission(body)
+            except (AccessError, ValueError, KeyError) as exc:
+                self._json(
+                    {
+                        "ok": False,
+                        "error": str(exc),
+                        "requires_confirmation": bool(
+                            getattr(exc, "requires_confirmation", False)
+                        ),
+                    },
+                    status=400,
+                )
+                return
+            self._json(result)
+            return
+        if path in ("/api/northbound/decommission", "/api/access/decommission"):
+            try:
+                result = RUNTIME.decommission(
+                    str(body.get("device_id", "")),
+                    confirm=bool(body.get("confirm", False)),
+                )
+            except (AccessError, ValueError, KeyError) as exc:
+                self._json(
+                    {
+                        "ok": False,
+                        "error": str(exc),
+                        "requires_confirmation": bool(
+                            getattr(exc, "requires_confirmation", False)
+                        ),
+                    },
+                    status=400,
+                )
+                return
+            self._json(result)
             return
         if path == "/api/sim/reset":
             devices = RUNTIME.reset()

@@ -24,6 +24,16 @@ class DeviceAdapter(ABC):
     def bindings(self) -> list[DeviceBinding]:
         raise NotImplementedError
 
+    def add_device(self, config: dict[str, Any]) -> DeviceBinding:
+        raise NotImplementedError(f"{self.name} does not support commissioning")
+
+    def remove_device(self, device_id: str) -> None:
+        raise NotImplementedError(f"{self.name} does not support decommissioning")
+
+    def verify_device(self, config: dict[str, Any]) -> None:
+        """Optional pre-commission check (e.g. entity exists, broker reachable)."""
+        return None
+
     @abstractmethod
     def call(
         self,

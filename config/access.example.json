@@ -4,7 +4,8 @@
     "allow_high_risk": false,
     "allowed_rooms": null,
     "allowed_kinds": null,
-    "allowed_adapters": null
+    "allowed_adapters": null,
+    "allow_auto_commission": false
   },
   "adapters": {
     "sim": {
@@ -24,7 +25,13 @@
           "room": "客厅",
           "tier": "T1",
           "protocol": "Matter",
-          "capabilities": ["turn_on", "turn_off", "toggle", "set_brightness", "read"],
+          "capabilities": [
+            "turn_on",
+            "turn_off",
+            "toggle",
+            "set_brightness",
+            "read"
+          ],
           "safe_to_automate": false
         },
         {
@@ -35,7 +42,11 @@
           "room": "玄关",
           "tier": "T1",
           "protocol": "Matter",
-          "capabilities": ["lock", "unlock", "read"],
+          "capabilities": [
+            "lock",
+            "unlock",
+            "read"
+          ],
           "safe_to_automate": false
         }
       ]
@@ -56,7 +67,12 @@
           "room": "客厅",
           "tier": "T1",
           "protocol": "Zigbee",
-          "capabilities": ["turn_on", "turn_off", "toggle", "read"],
+          "capabilities": [
+            "turn_on",
+            "turn_off",
+            "toggle",
+            "read"
+          ],
           "safe_to_automate": false
         }
       ]

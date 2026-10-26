@@ -22,6 +22,8 @@ Tools:
     iot_device_describe  capabilities and metadata for one device
     iot_tool_catalog capability catalog across all adapters
     iot_call         policy-checked, audited device action
+    iot_commission   controlled onboarding with explicit confirmation
+    iot_decommission remove a commissioned device
 """
 
 from __future__ import annotations
@@ -33,17 +35,19 @@ import sys
 
 from . import agent
 from . import deep_scan as deep
+from .access.commissioning import CommissionStore
 from .access.errors import AccessError
 from .deep_scan import DEFAULT_OUT as DEEP_OUT
 from .discover import DEFAULT_OUT, discover, print_inventory
+from .paths import DATA_DIR
 from .runtime import SouthboundRuntime
 
-RUNTIME = SouthboundRuntime()
+RUNTIME = SouthboundRuntime(store=CommissionStore(DATA_DIR / "commissioned.json"))
 SIM = RUNTIME.simulator
 HUB = RUNTIME.hub
 
 SERVER_NAME = "southbound"
-SERVER_VERSION = "0.5.0"
+SERVER_VERSION = "0.6.0"
 DEFAULT_PROTOCOL = "2024-11-05"
 
 TOOLS = [
@@ -240,6 +244,71 @@ TOOLS = [
             "additionalProperties": False,
         },
     },
+    {
+        "name": "iot_commission",
+        "description": (
+            "Commission one device into the access layer with explicit owner "
+            "authorization. This is controlled onboarding, not self-propagation."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "adapter": {
+                    "type": "string",
+                    "enum": ["sim", "home_assistant", "mqtt", "zigbee2mqtt"],
+                },
+                "device_id": {"type": "string"},
+                "name": {"type": "string"},
+                "kind": {
+                    "type": "string",
+                    "enum": [
+                        "light",
+                        "plug",
+                        "cover",
+                        "sensor",
+                        "binary_sensor",
+                        "purifier",
+                        "thermostat",
+                        "lock",
+                    ],
+                },
+                "room": {"type": "string"},
+                "protocol": {"type": "string"},
+                "tier": {"type": "string", "enum": ["T0", "T1", "T2", "T3"]},
+                "capabilities": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "Explicit capability allowlist; omitted means non-high-risk defaults.",
+                },
+                "entity_id": {"type": "string"},
+                "friendly_name": {"type": "string"},
+                "command_topic": {"type": "string"},
+                "state_topic": {"type": "string"},
+                "state": {"type": "object"},
+                "safe_to_automate": {"type": "boolean", "default": False},
+                "confirm": {
+                    "type": "boolean",
+                    "description": "Explicit owner confirmation for commissioning.",
+                    "default": False,
+                },
+            },
+            "required": ["adapter", "kind"],
+            "additionalProperties": False,
+        },
+    },
+    {
+        "name": "iot_decommission",
+        "description": "Remove a commissioned device after policy and confirmation.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "device_id": {"type": "string"},
+                "confirm": {"type": "boolean", "default": False},
+            },
+            "required": ["device_id"],
+            "additionalProperties": False,
+        },
+    },
 ]
 
 
@@ -398,6 +467,39 @@ def _tool_iot_call(arguments: dict) -> dict:
     return _text_result(json.dumps(result, ensure_ascii=False, indent=2))
 
 
+def _tool_iot_commission(arguments: dict) -> dict:
+    try:
+        result = RUNTIME.commission(arguments)
+    except (AccessError, ValueError, KeyError) as exc:
+        payload = {
+            "ok": False,
+            "error": str(exc),
+            "requires_confirmation": bool(getattr(exc, "requires_confirmation", False)),
+        }
+        return _text_result(
+            json.dumps(payload, ensure_ascii=False, indent=2), is_error=True
+        )
+    return _text_result(json.dumps(result, ensure_ascii=False, indent=2))
+
+
+def _tool_iot_decommission(arguments: dict) -> dict:
+    try:
+        result = RUNTIME.decommission(
+            str(arguments.get("device_id", "")),
+            confirm=bool(arguments.get("confirm", False)),
+        )
+    except (AccessError, ValueError, KeyError) as exc:
+        payload = {
+            "ok": False,
+            "error": str(exc),
+            "requires_confirmation": bool(getattr(exc, "requires_confirmation", False)),
+        }
+        return _text_result(
+            json.dumps(payload, ensure_ascii=False, indent=2), is_error=True
+        )
+    return _text_result(json.dumps(result, ensure_ascii=False, indent=2))
+
+
 HANDLERS = {
     "lan_inventory": _tool_lan_inventory,
     "device_details": _tool_device_details,
@@ -412,6 +514,8 @@ HANDLERS = {
     "iot_device_describe": _tool_iot_device_describe,
     "iot_tool_catalog": _tool_iot_tool_catalog,
     "iot_call": _tool_iot_call,
+    "iot_commission": _tool_iot_commission,
+    "iot_decommission": _tool_iot_decommission,
 }
 
 

@@ -6,6 +6,36 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-10-26
+
+### Added
+
+- **Controlled onboarding/commissioning**: `SouthboundRuntime.commission()`
+  and `decommission()` with explicit confirmation, policy scope checks,
+  least-privilege capabilities, audit, and event flow.
+- **Dynamic device registration**: `AccessHub.register_binding()` /
+  `unregister_binding()`; simulator, Home Assistant, MQTT, and
+  Zigbee2MQTT adapters implement `add_device` / `remove_device` / `verify_device`.
+- **CommissionStore**: non-secret, gitignored persistence in
+  `data/commissioned.json`; runtimes restore authorized devices on startup.
+- **Northbound API**: `POST /api/northbound/commission` and
+  `/decommission`.
+- **CLI**: `southbound onboard` and `southbound decommission`.
+- **MCP**: `iot_commission` and `iot_decommission` (15 tools total).
+- **Dashboard**: “接入设备” onboarding dialog, commission/decommission
+  events in the flowbar, and remove buttons for commissioned virtual devices.
+- **Docs**: `docs/ONBOARDING.md` with the full lifecycle, API, policy,
+  persistence, and safety boundaries.
+- Tests: commissioning, policy, persistence, and lifecycle coverage
+  (46 tests total).
+
+### Changed
+
+- Home Assistant and MQTT adapters now report availability based on
+  transport configuration, not on an existing device list, so they can
+  commission their first device.
+- Policy configuration adds `allow_auto_commission` (default false).
+
 ## [0.5.0] - 2026-10-26
 
 ### Added

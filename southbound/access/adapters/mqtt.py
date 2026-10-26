@@ -14,7 +14,7 @@ import json
 import threading
 from typing import Any
 
-from ..capabilities import capabilities_for
+from ..capabilities import capabilities_for, commissioned_capabilities
 from ..errors import AdapterUnavailable
 from ..models import Capability, DeviceBinding
 from .base import DeviceAdapter
@@ -50,41 +50,89 @@ class MqttAdapter(DeviceAdapter):
         self._lock = threading.Lock()
 
     def available(self) -> bool:
-        return mqtt is not None and bool(self.devices)
+        return mqtt is not None
+
+    def _binding_for(
+        self, item: dict[str, Any], commissioned: bool = False
+    ) -> DeviceBinding:
+        device_id = item.get("device_id")
+        custom = item.get("payloads", {})
+        kind = item.get("kind", "light")
+        return DeviceBinding(
+            device_id=device_id,
+            name=item.get("name", device_id),
+            kind=kind,
+            room=item.get("room", ""),
+            protocol=item.get("protocol", "MQTT"),
+            tier=item.get("tier", "T1"),
+            adapter=self.name,
+            address={
+                "command_topic": item.get("command_topic"),
+                "state_topic": item.get("state_topic") or "",
+                "payloads": custom,
+            },
+            capabilities=capabilities_for(kind, item.get("capabilities")),
+            metadata={
+                "source": "mqtt",
+                "safe_to_automate": bool(item.get("safe_to_automate", False)),
+                "commissioned": commissioned,
+            },
+        )
 
     def bindings(self) -> list[DeviceBinding]:
         if not self.available():
             return []
-        bindings: list[DeviceBinding] = []
-        for item in self.devices:
-            device_id = item.get("device_id")
-            command_topic = item.get("command_topic")
-            state_topic = item.get("state_topic")
-            if not device_id or not command_topic:
-                continue
-            kind = item.get("kind", "light")
-            bindings.append(
-                DeviceBinding(
-                    device_id=device_id,
-                    name=item.get("name", device_id),
-                    kind=kind,
-                    room=item.get("room", ""),
-                    protocol=item.get("protocol", "MQTT"),
-                    tier=item.get("tier", "T1"),
-                    adapter=self.name,
-                    address={
-                        "command_topic": command_topic,
-                        "state_topic": state_topic or "",
-                        "payloads": item.get("payloads", {}),
-                    },
-                    capabilities=capabilities_for(kind, item.get("capabilities")),
-                    metadata={
-                        "source": "mqtt",
-                        "safe_to_automate": bool(item.get("safe_to_automate", False)),
-                    },
-                )
+        return [
+            self._binding_for(item)
+            for item in self.devices
+            if item.get("device_id") and item.get("command_topic")
+        ]
+
+    def add_device(self, config: dict[str, Any]) -> DeviceBinding:
+        if mqtt is None:
+            raise AdapterUnavailable(
+                "paho-mqtt 未安装；运行 pip install 'southbound[mqtt]'"
             )
-        return bindings
+        command_topic = str(config.get("command_topic") or "").strip()
+        if not command_topic:
+            raise ValueError("command_topic is required")
+        device_id = str(config.get("device_id") or "").strip()
+        if not device_id:
+            raise ValueError("device_id is required")
+        kind = str(config.get("kind") or "sensor")
+        capabilities = commissioned_capabilities(kind, config.get("capabilities"))
+        item = {
+            **config,
+            "device_id": device_id,
+            "command_topic": command_topic,
+            "kind": kind,
+            "capabilities": [capability.name for capability in capabilities],
+        }
+        self.devices.append(item)
+        try:
+            client = self._ensure_client()
+            if item.get("state_topic"):
+                client.subscribe(item["state_topic"], qos=0)
+        except Exception:
+            self.devices.pop()
+            raise
+        return self._binding_for(item, commissioned=True)
+
+    def verify_device(self, config: dict[str, Any]) -> None:
+        if mqtt is None:
+            raise AdapterUnavailable(
+                "paho-mqtt 未安装；运行 pip install 'southbound[mqtt]'"
+            )
+        if not config.get("command_topic"):
+            raise ValueError("command_topic is required")
+
+    def remove_device(self, device_id: str) -> None:
+        before = len(self.devices)
+        self.devices = [
+            item for item in self.devices if item.get("device_id") != device_id
+        ]
+        if len(self.devices) == before:
+            raise ValueError(f"device not commissioned: {device_id}")
 
     def call(
         self,
@@ -143,13 +191,13 @@ class MqttAdapter(DeviceAdapter):
             return {"preset_mode": arguments["mode"]}
         raise AdapterUnavailable(f"MQTT 不支持 {binding.kind}.{name}")
 
-    def _ensure_client(self) -> None:
+    def _ensure_client(self) -> Any:
         if mqtt is None:
             raise AdapterUnavailable(
                 "paho-mqtt 未安装；运行 pip install 'southbound[mqtt]'"
             )
         if self._client is not None:
-            return
+            return self._client
         try:
             client = mqtt.Client(
                 mqtt.CallbackAPIVersion.VERSION1,
@@ -174,6 +222,7 @@ class MqttAdapter(DeviceAdapter):
         }:
             client.subscribe(topic, qos=0)
         self._client = client
+        return client
 
     def _on_message(self, _client, _userdata, message) -> None:
         raw = message.payload.decode("utf-8", "ignore")
@@ -222,3 +271,19 @@ class Zigbee2MqttAdapter(MqttAdapter):
             client_id="southbound-z2m",
             timeout=timeout,
         )
+
+    def _normalize(self, item: dict[str, Any]) -> dict[str, Any]:
+        friendly = (
+            item.get("friendly_name")
+            or item.get("name")
+            or item.get("device_id", "device")
+        )
+        return {
+            **item,
+            "device_id": item.get("device_id") or f"z2m:{friendly}",
+            "command_topic": item.get("command_topic") or f"zigbee2mqtt/{friendly}/set",
+            "state_topic": item.get("state_topic") or f"zigbee2mqtt/{friendly}",
+        }
+
+    def add_device(self, config: dict[str, Any]) -> DeviceBinding:
+        return super().add_device(self._normalize(config))

@@ -45,6 +45,30 @@ class AccessHub:
                 bindings[binding.device_id] = binding
         self._bindings = bindings
 
+    def register_binding(
+        self, binding: DeviceBinding, adapter_name: str | None = None
+    ) -> dict[str, Any]:
+        adapter_name = adapter_name or binding.adapter
+        adapter = self.adapters.get(adapter_name)
+        if adapter is None:
+            raise AdapterUnavailable(f"未知 adapter：{adapter_name}")
+        if not adapter.available():
+            raise AdapterUnavailable(f"adapter {adapter_name} 不可用")
+        if binding.device_id in self._bindings:
+            raise AccessError(f"device_id 已存在：{binding.device_id}")
+        binding.adapter = adapter_name
+        self._bindings[binding.device_id] = binding
+        return binding.snapshot()
+
+    def unregister_binding(self, device_id: str) -> dict[str, Any]:
+        binding = self._bindings.pop(device_id, None)
+        if binding is None:
+            raise UnknownDevice(f"未知设备：{device_id}")
+        return binding.snapshot()
+
+    def has_binding(self, device_id: str) -> bool:
+        return device_id in self._bindings
+
     def devices(self, include_address: bool = False) -> list[dict[str, Any]]:
         return [
             binding.snapshot(include_address=include_address)

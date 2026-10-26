@@ -4,6 +4,14 @@
   const TIER_ORDER = ["T3", "T2", "T1", "T0", "?"];
   const TIER_CLASS = { T3: "t3", T2: "t2", T1: "t1", T0: "t0", "?": "tu" };
   const TIER_NAME = { T3: "T3 边缘", T2: "T2 Linux", T1: "T1 微控", T0: "T0 端点", "?": "未确定" };
+  const BUILTIN_SIM_IDS = new Set([
+    "living_light",
+    "desk_plug",
+    "living_sensor",
+    "living_curtain",
+    "entry_door",
+    "bedroom_purifier",
+  ]);
 
   const state = {
     inventory: null,
@@ -486,7 +494,14 @@
           <span class="status-dot ${active ? "is-on" : ""}"></span>
         </div>
         <div class="sim-tile__body">${simBody(device)}</div>
-        <span class="tier-badge ${tierClass}" style="align-self:flex-start">${esc(device.tier)}</span>
+        <div class="sim-tile__footer">
+          <span class="tier-badge ${tierClass}">${esc(device.tier)}</span>
+          ${
+            BUILTIN_SIM_IDS.has(device.id)
+              ? ""
+              : '<button class="mini mini--danger" type="button" data-action="decommission">移除</button>'
+          }
+        </div>
       </article>`;
   }
 
@@ -527,6 +542,126 @@
       renderStats();
     } catch (error) {
       console.error("sim refresh failed", error);
+    }
+  }
+
+  async function refreshAccess() {
+    try {
+      const [status, catalog] = await Promise.all([
+        api("/api/access/status"),
+        api("/api/access/catalog"),
+      ]);
+      state.access = status || {};
+      state.catalog = catalog || { tools: [] };
+      renderRail();
+    } catch (error) {
+      console.error("access refresh failed", error);
+    }
+  }
+
+  async function decommissionDevice(deviceId) {
+    try {
+      await api("/api/northbound/decommission", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ device_id: deviceId, confirm: true }),
+      });
+      await refreshSim();
+      await refreshAccess();
+    } catch (error) {
+      console.error("decommission failed", error);
+    }
+  }
+
+  function updateOnboardFields() {
+    const adapter = $("#onboard-adapter").value;
+    document.querySelectorAll("#onboard-form [data-field]").forEach((field) => {
+      const name = field.dataset.field;
+      const show =
+        (adapter === "sim" && name === "state") ||
+        (adapter === "home_assistant" && name === "entity_id") ||
+        (adapter === "zigbee2mqtt" && name === "friendly_name") ||
+        (adapter === "mqtt" &&
+          (name === "command_topic" || name === "state_topic"));
+      field.hidden = !show;
+    });
+  }
+
+  function openOnboard() {
+    const form = $("#onboard-form");
+    form.reset();
+    form.name.value = "演示传感器";
+    form.kind.value = "sensor";
+    form.room.value = "客厅";
+    form.protocol.value = "Virtual";
+    form.tier.value = "T1";
+    form.capabilities.value = "read";
+    form.confirm.checked = true;
+    form.state.value = '{"temperature":22.5,"humidity":45,"battery":90}';
+    form.device_id.value = "";
+    updateOnboardFields();
+    const error = $("#onboard-error");
+    error.hidden = true;
+    error.textContent = "";
+    $("#onboard-dialog").showModal();
+  }
+
+  async function submitOnboard(event) {
+    event.preventDefault();
+    const form = event.target;
+    const error = $("#onboard-error");
+    const adapter = form.adapter.value;
+    const body = {
+      adapter,
+      device_id: form.device_id.value.trim(),
+      name: form.name.value.trim(),
+      kind: form.kind.value,
+      room: form.room.value.trim(),
+      protocol: form.protocol.value.trim(),
+      tier: form.tier.value,
+      confirm: form.confirm.checked,
+      safe_to_automate: false,
+    };
+    const capabilities = form.capabilities.value
+      .split(",")
+      .map((item) => item.trim())
+      .filter(Boolean);
+    if (capabilities.length) body.capabilities = capabilities;
+    if (adapter === "home_assistant") {
+      body.entity_id = form.entity_id.value.trim();
+    } else if (adapter === "zigbee2mqtt") {
+      body.friendly_name = form.friendly_name.value.trim();
+    } else if (adapter === "mqtt") {
+      body.command_topic = form.command_topic.value.trim();
+      body.state_topic = form.state_topic.value.trim();
+    }
+    if (adapter === "sim" && form.state.value.trim()) {
+      try {
+        body.state = JSON.parse(form.state.value);
+      } catch (_) {
+        error.textContent = "Sim state 不是合法 JSON。";
+        error.hidden = false;
+        return;
+      }
+    }
+    if (!body.confirm) {
+      error.textContent = "需要勾选确认才能接入。";
+      error.hidden = false;
+      return;
+    }
+    error.hidden = true;
+    try {
+      await api("/api/northbound/commission", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      $("#onboard-dialog").close();
+      await refreshSim();
+      await refreshAccess();
+    } catch (err) {
+      error.textContent = err.message;
+      error.hidden = false;
     }
   }
 
@@ -655,11 +790,25 @@
       if (data) selectTopologyNode(data);
     });
 
+    $("#onboard-open").addEventListener("click", openOnboard);
+    $("#onboard-close").addEventListener("click", () =>
+      $("#onboard-dialog").close()
+    );
+    $("#onboard-cancel").addEventListener("click", () =>
+      $("#onboard-dialog").close()
+    );
+    $("#onboard-adapter").addEventListener("change", updateOnboardFields);
+    $("#onboard-form").addEventListener("submit", submitOnboard);
+
     $("#sim-devices").addEventListener("click", (event) => {
       const button = event.target.closest("button[data-action]");
       if (!button) return;
       const tile = button.closest(".sim-tile");
       if (!tile) return;
+      if (button.dataset.action === "decommission") {
+        decommissionDevice(tile.dataset.id);
+        return;
+      }
       act(tile.dataset.id, button.dataset.action);
     });
 
@@ -707,6 +856,31 @@
         return `northbound · state · ${shorten(event.name || event.device_id, 18)} · ${
           event.capability
         }`;
+      case "commission.request":
+        return `northbound · commission · ${shorten(
+          event.name || event.device_id,
+          20
+        )}`;
+      case "commission":
+        return `southbound · commission · ${shorten(
+          event.name || event.device_id,
+          18
+        )} ${event.ok ? "✓" : "✗"}`;
+      case "commission.result":
+        return `northbound · ready · ${shorten(
+          event.name || event.device_id,
+          18
+        )} · ${(event.capabilities || []).length} capabilities`;
+      case "decommission":
+        return `southbound · remove · ${shorten(
+          event.name || event.device_id,
+          18
+        )} ${event.ok ? "✓" : "✗"}`;
+      case "decommission.result":
+        return `northbound · removed · ${shorten(
+          event.name || event.device_id,
+          18
+        )}`;
       case "reset":
         return "southbound · simulator reset";
       default:

@@ -111,6 +111,17 @@ _DEVICE_SPECS = [
 ]
 
 
+_DEFAULT_STATE = {
+    "light": {"on": False, "brightness": 60, "power_w": 0.0},
+    "plug": {"on": False, "power_w": 0.0},
+    "sensor": {"temperature": 22.0, "humidity": 45, "battery": 100},
+    "binary_sensor": {"open": False, "battery": 100},
+    "cover": {"position": 0, "target": 0, "moving": False},
+    "purifier": {"on": False, "pm25": 20, "mode": "auto"},
+    "thermostat": {"temperature": 22, "target": 22},
+}
+
+
 class Simulator:
     def __init__(self) -> None:
         self._lock = threading.RLock()
@@ -129,6 +140,34 @@ class Simulator:
             }
             for device in self._devices.values():
                 device.state = dict(device.state)
+
+    def add_device(self, spec: dict) -> dict:
+        with self._lock:
+            device_id = str(spec.get("id") or spec.get("device_id") or "").strip()
+            if not device_id:
+                raise ValueError("device id is required")
+            if device_id in self._devices:
+                raise ValueError(f"device already exists: {device_id}")
+            kind = str(spec.get("kind") or "sensor")
+            device = VirtualDevice(
+                id=device_id,
+                name=str(spec.get("name") or device_id),
+                kind=kind,
+                room=str(spec.get("room") or ""),
+                protocol=str(spec.get("protocol") or "Virtual"),
+                tier=str(spec.get("tier") or "T1"),
+                state=dict(spec.get("state") or _DEFAULT_STATE.get(kind, {})),
+                capabilities=list(spec.get("capabilities") or []),
+            )
+            self._devices[device_id] = device
+            return device.snapshot()
+
+    def remove_device(self, device_id: str) -> bool:
+        with self._lock:
+            if device_id not in self._devices:
+                raise KeyError(device_id)
+            del self._devices[device_id]
+            return True
 
     def _tick(self) -> None:
         now = time.monotonic()

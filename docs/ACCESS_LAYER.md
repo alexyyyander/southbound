@@ -135,10 +135,26 @@ Agent 先读 catalog 或 `iot_devices_list`，再用 `iot_call` 执行。
   - `command`：`plane=southbound`, `direction=down`
   - `state`：`plane=northbound`, `direction=up`
   - `intent.result`：`plane=northbound`, `direction=out`
+  - `commission.request` / `commission` / `commission.result`：受控接入握手
+  - `decommission` / `decommission.result`：撤销接入
 - **SSE**：`GET /api/events` 实时推送；`GET /api/events/recent?since=<id>` 支持重放。
 - **Dashboard**：顶部 flowbar 按 `plane` 在 Agent—Southbound 与 Southbound—Devices 两段上打点，显示最新事件和计数。
 
 运行时是进程内的：Dashboard、CLI、MCP 各自嵌入一个。需要多客户端共享状态时，可把同一组 HTTP 端点独立成 service，adapter 和策略代码不变。
+
+### 受控 onboarding
+
+`commission()` / `decommission()` 把“扩散”限制为受控接入：
+
+1. 发现/提交设备配置；
+2. 校验 adapter、device_id 与能力白名单；
+3. `PolicyEngine.decide_commission()` 检查范围、`confirm` 和高风险能力；
+4. adapter 验证/添加设备；
+5. `AccessHub.register_binding()` 加入设备图与 Tool Catalog；
+6. 写审计、发事件、可选写入 `CommissionStore`；
+7. 重启后从 `data/commissioned.json` 恢复（不含 token/password）。
+
+完整流程、请求示例和安全边界见 [ONBOARDING.md](ONBOARDING.md)。
 
 ## 4. 策略
 
@@ -148,6 +164,7 @@ Agent 先读 catalog 或 `iot_devices_list`，再用 `iot_call` 执行。
 {
   "mode": "supervised",
   "allow_high_risk": false,
+  "allow_auto_commission": false,
   "allowed_rooms": null,
   "allowed_kinds": null,
   "allowed_adapters": null
@@ -163,6 +180,14 @@ Agent 先读 catalog 或 `iot_devices_list`，再用 `iot_call` 执行。
 高风险动作（门锁、电源、燃气）默认**不可用**。即使用户要求“全智能”，工具层也不会让 LLM 直接开锁。
 
 `allowed_rooms` / `allowed_kinds` / `allowed_adapters` 是范围限制，适合把 agent 限定在实验室或客厅。
+
+设备接入由 `decide_commission()` 单独判断：
+
+- `read_only`：禁止接入；
+- `supervised`：必须 `confirm=true`；
+- `autonomous`：默认仍必须 `confirm=true`；只有 `allow_auto_commission=true` 才允许自动接入；
+- 请求包含高风险能力（如 `unlock`）时，还要求 `allow_high_risk=true`；
+- 未显式指定 capabilities 时，默认只授予非 high-risk 能力。
 
 ## 5. 适配器
 
@@ -226,6 +251,8 @@ cp config/access.example.json config/access.local.json
 | `iot_device_describe` | 单设备详情 |
 | `iot_tool_catalog` | 跨设备能力目录 |
 | `iot_call` | 策略检查 + 审计后执行 |
+| `iot_commission` | 受控接入新设备（默认需要 confirm） |
+| `iot_decommission` | 移除已接入设备（默认需要 confirm） |
 
 `iot_call` 参数：
 
@@ -242,6 +269,8 @@ cp config/access.example.json config/access.local.json
 
 ```bash
 python3 -m southbound intent "打开客厅灯并关掉书房插座"
+python3 -m southbound onboard --adapter sim --id demo_sensor --confirm
+python3 -m southbound decommission demo_sensor --confirm
 python3 -m southbound serve
 python3 -m southbound tools
 python3 -m southbound call living_light set_brightness --args '{"brightness": 30}'
@@ -263,6 +292,8 @@ python3 -m southbound call ha:lock.front_door unlock --confirm
 - `GET /api/northbound/catalog`
 - `POST /api/northbound/intent`
 - `POST /api/northbound/call`
+- `POST /api/northbound/commission`
+- `POST /api/northbound/decommission`
 - `GET /api/events`（SSE）
 - `GET /api/events/recent?since=<id>`
 - `GET /api/access/status` 等旧路径保留为别名
@@ -332,6 +363,7 @@ class MyAdapter(DeviceAdapter):
 - 模拟器、Home Assistant、MQTT、Zigbee2MQTT 四类 adapter；
 - MCP、CLI、HTTP 三种入口；
 - SouthboundRuntime、EventBus、SSE 事件流与面板 flowbar；
+- 受控 onboarding/commissioning、持久化与撤销；
 - 无硬件闭环与可视化；
 - 测试覆盖核心路径。
 
@@ -341,6 +373,7 @@ class MyAdapter(DeviceAdapter):
 - ESPHome 原生 protobuf API（目前经 HA/MQTT）；
 - 设备侧事件订阅（MQTT 已缓存 state，但尚未做完整事件流）；
 - 运行时独立 service / 多客户端共享状态；
+- commissioning 的隔离区/审批 UI 与从扫描结果一键预填；
 - 设备自动发现到 adapter 配置的自动生成；
 - 多用户认证、远端 TLS、权限模型；
 - 真实硬件上的延迟与可靠性数据。

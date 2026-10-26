@@ -47,6 +47,7 @@ def _policy_from(config: dict[str, Any]) -> PolicyEngine:
         PolicyConfig(
             mode=str(raw.get("mode", "supervised")),
             allow_high_risk=bool(raw.get("allow_high_risk", False)),
+            allow_auto_commission=bool(raw.get("allow_auto_commission", False)),
             allowed_rooms=raw.get("allowed_rooms"),
             allowed_kinds=raw.get("allowed_kinds"),
             allowed_adapters=raw.get("allowed_adapters"),

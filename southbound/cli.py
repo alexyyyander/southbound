@@ -20,8 +20,14 @@ from pathlib import Path
 
 from . import agent as agent_module
 from . import deep_scan, discover, mcp_server, viz_server
+from .access.commissioning import CommissionStore
 from .access.errors import AccessError
+from .paths import DATA_DIR
 from .runtime import SouthboundRuntime
+
+
+def _runtime() -> SouthboundRuntime:
+    return SouthboundRuntime(store=CommissionStore(DATA_DIR / "commissioned.json"))
 
 
 def cmd_discover(args: argparse.Namespace) -> int:
@@ -70,7 +76,7 @@ def cmd_agent(args: argparse.Namespace) -> int:
 
 def cmd_sim(args: argparse.Namespace) -> int:
     goal = " ".join(args.goal).strip() or "家里状态"
-    runtime = SouthboundRuntime()
+    runtime = _runtime()
     result = runtime.intent(goal)
     if args.json:
         print(json.dumps(result, ensure_ascii=False, indent=2))
@@ -101,7 +107,7 @@ def cmd_mcp(_args: argparse.Namespace) -> int:
 
 
 def cmd_tools(args: argparse.Namespace) -> int:
-    runtime = SouthboundRuntime()
+    runtime = _runtime()
     catalog = runtime.catalog()
     if args.json:
         print(json.dumps({"tools": catalog}, ensure_ascii=False, indent=2))
@@ -117,7 +123,7 @@ def cmd_tools(args: argparse.Namespace) -> int:
 
 
 def cmd_call(args: argparse.Namespace) -> int:
-    runtime = SouthboundRuntime()
+    runtime = _runtime()
     try:
         arguments = json.loads(args.arguments) if args.arguments else {}
     except json.JSONDecodeError as exc:
@@ -150,8 +156,79 @@ def cmd_call(args: argparse.Namespace) -> int:
 
 
 def cmd_access(_args: argparse.Namespace) -> int:
-    runtime = SouthboundRuntime()
+    runtime = _runtime()
     print(json.dumps(runtime.status(), ensure_ascii=False, indent=2))
+    return 0
+
+
+def cmd_onboard(args: argparse.Namespace) -> int:
+    runtime = _runtime()
+    request = {
+        "adapter": args.adapter,
+        "device_id": args.device_id,
+        "name": args.name or "新设备",
+        "kind": args.kind,
+        "room": args.room,
+        "protocol": args.protocol,
+        "tier": args.tier,
+        "confirm": args.confirm,
+        "safe_to_automate": args.safe_to_automate,
+    }
+    if args.capabilities:
+        request["capabilities"] = [
+            item.strip() for item in args.capabilities.split(",") if item.strip()
+        ]
+    for field in ("entity_id", "friendly_name", "command_topic", "state_topic"):
+        value = getattr(args, field)
+        if value:
+            request[field] = value
+    if args.state:
+        try:
+            request["state"] = json.loads(args.state)
+        except json.JSONDecodeError as exc:
+            print(f"invalid --state JSON: {exc}", file=sys.stderr)
+            return 2
+    try:
+        result = runtime.commission(request)
+    except (AccessError, ValueError, KeyError) as exc:
+        print(
+            json.dumps(
+                {
+                    "ok": False,
+                    "error": str(exc),
+                    "requires_confirmation": bool(
+                        getattr(exc, "requires_confirmation", False)
+                    ),
+                },
+                ensure_ascii=False,
+                indent=2,
+            )
+        )
+        return 1
+    print(json.dumps(result, ensure_ascii=False, indent=2))
+    return 0
+
+
+def cmd_decommission(args: argparse.Namespace) -> int:
+    runtime = _runtime()
+    try:
+        result = runtime.decommission(args.device_id, confirm=args.confirm)
+    except (AccessError, ValueError, KeyError) as exc:
+        print(
+            json.dumps(
+                {
+                    "ok": False,
+                    "error": str(exc),
+                    "requires_confirmation": bool(
+                        getattr(exc, "requires_confirmation", False)
+                    ),
+                },
+                ensure_ascii=False,
+                indent=2,
+            )
+        )
+        return 1
+    print(json.dumps(result, ensure_ascii=False, indent=2))
     return 0
 
 
@@ -165,10 +242,14 @@ def cmd_info(_args: argparse.Namespace) -> int:
     print("  sim       intent 的兼容别名")
     print("  tools     接入工具层的能力目录")
     print("  call      通过策略与审计层执行设备能力")
+    print("  onboard   受控接入新设备（需 --confirm）")
+    print("  decommission 移除已接入设备（需 --confirm）")
     print("  access    适配器、策略、审计与事件状态")
     print("  demo      可视化面板（serve 的别名）")
     print("  mcp       stdio MCP server")
-    print("\n文档：README.md、docs/ARCHITECTURE.md、docs/ACCESS_LAYER.md")
+    print(
+        "\n文档：README.md、docs/ARCHITECTURE.md、docs/ACCESS_LAYER.md、docs/ONBOARDING.md"
+    )
     return 0
 
 
@@ -239,6 +320,48 @@ def build_parser() -> argparse.ArgumentParser:
 
     p = sub.add_parser("access", help="show adapters, policy, and audit status")
     p.set_defaults(func=cmd_access)
+
+    p = sub.add_parser(
+        "onboard", help="commission a device with explicit authorization"
+    )
+    p.add_argument(
+        "--adapter",
+        choices=["sim", "home_assistant", "mqtt", "zigbee2mqtt"],
+        default="sim",
+    )
+    p.add_argument("--id", dest="device_id", default="")
+    p.add_argument("--name", default="")
+    p.add_argument(
+        "--kind",
+        default="sensor",
+        choices=[
+            "light",
+            "plug",
+            "cover",
+            "sensor",
+            "binary_sensor",
+            "purifier",
+            "thermostat",
+            "lock",
+        ],
+    )
+    p.add_argument("--room", default="")
+    p.add_argument("--protocol", default="Virtual")
+    p.add_argument("--tier", default="T1", choices=["T0", "T1", "T2", "T3"])
+    p.add_argument("--capabilities", default="", help="comma-separated list")
+    p.add_argument("--entity-id", default="")
+    p.add_argument("--friendly-name", default="")
+    p.add_argument("--command-topic", default="")
+    p.add_argument("--state-topic", default="")
+    p.add_argument("--state", default="", help="JSON state for sim devices")
+    p.add_argument("--safe-to-automate", action="store_true")
+    p.add_argument("--confirm", action="store_true")
+    p.set_defaults(func=cmd_onboard)
+
+    p = sub.add_parser("decommission", help="remove a commissioned device")
+    p.add_argument("device_id")
+    p.add_argument("--confirm", action="store_true")
+    p.set_defaults(func=cmd_decommission)
 
     p = sub.add_parser("info", help="show the toolchain map")
     p.set_defaults(func=cmd_info)

@@ -7,9 +7,10 @@ Southbound 取 IoT/电信架构里的 *southbound interface*：北向接口面�
 - **发现**：ARP + mDNS + SSDP，支持 `/23` 等非 `/24` 网段，mDNS 实例解析到 IP。
 - **分级**：厂商 OUI、服务类型、端口指纹，映射到 T0–T3 agent 档位。
 - **接入工具层**：统一设备/能力模型、JSON Schema 参数校验、风险策略、审计日志、Tool Catalog。
+- **受控 onboarding**：发现 → 授权 → 绑定 adapter/策略 → 工具目录；高风险能力按最小权限授予。
 - **适配器**：模拟器、Home Assistant REST、MQTT、Zigbee2MQTT。
 - **模拟与可视化**：六个虚拟端点、确定性 agent trace、观测站风格面板。
-- **MCP**：13 个工具，覆盖发现、接入层查询、`iot_call` 执行与模拟器控制。
+- **MCP**：15 个工具，覆盖发现、接入层查询、`iot_call`、受控 onboarding 与模拟器控制。
 - **文档**：架构可行性、接入层、芯片能力、信号采集、硬件采购与实测报告。
 
 ## 快速开始
@@ -21,6 +22,11 @@ python3 -m southbound discover --sweep
 
 ```bash
 python3 -m southbound intent "打开客厅灯并关掉书房插座"
+```
+
+```bash
+python3 -m southbound onboard --adapter sim --id demo_sensor \
+  --name 演示传感器 --kind sensor --room 客厅 --capabilities read --confirm
 ```
 
 ```bash
@@ -129,8 +135,9 @@ export HA_TOKEN="..."
 | `southbound sim "打开客厅灯"` | intent 的兼容别名 |
 | `southbound tools` | 接入层能力目录 |
 | `southbound call <device> <capability>` | 通过策略与审计执行能力 |
+| `southbound onboard ... --confirm` | 受控接入新设备 |
+| `southbound decommission <device> --confirm` | 移除已接入设备 |
 | `southbound access` | 适配器、策略、审计与运行时状态 |
-| `southbound serve` | 启动运行时与可视化面板 |
 | `southbound demo` | `serve` 的别名 |
 | `southbound mcp` | 启动 stdio MCP server |
 | `southbound info` | 工具链地图 |
@@ -154,6 +161,7 @@ southbound/
 │   ├── access/
 │   │   ├── models.py        # DeviceBinding / Capability / Risk
 │   │   ├── capabilities.py  # 能力定义、校验、目录
+│   │   ├── commissioning.py # 受控接入记录与持久化
 │   │   ├── policy.py        # 策略引擎
 │   │   ├── audit.py         # JSONL 审计
 │   │   ├── hub.py           # AccessHub
@@ -169,6 +177,7 @@ southbound/
 ├── docs/
 │   ├── ARCHITECTURE.md
 │   ├── ACCESS_LAYER.md
+│   ├── ONBOARDING.md
 │   ├── COMPARISON.md
 │   ├── CHIPS.md
 │   ├── SIGNALS.md
@@ -207,6 +216,7 @@ claude mcp add --scope project southbound -- python3 /path/to/southbound/mcp_ser
 - 发现与方案：`lan_inventory`、`device_details`、`signal_paths`、`integration_plan`、`deep_scan_lan`
 - 模拟器：`sim_devices`、`sim_action`、`sim_goal`
 - 接入层：`iot_hub_status`、`iot_devices_list`、`iot_device_describe`、`iot_tool_catalog`、`iot_call`
+- 受控 onboarding：`iot_commission`、`iot_decommission`
 
 首次使用需要在 Claude Code 中批准该 server。
 
@@ -216,13 +226,14 @@ claude mcp add --scope project southbound -- python3 /path/to/southbound/mcp_ser
 make test
 ```
 
-当前 40 项标准库测试覆盖分级规则、模拟器、agent 目标拆分、能力校验、策略、审计、工具目录、运行时/事件总线、HA 适配器映射、MQTT payload 和 CLI 解析。
+当前 46 项标准库测试覆盖分级规则、模拟器、agent 目标拆分、能力校验、策略、审计、工具目录、运行时/事件总线、受控接入与持久化、HA 适配器映射、MQTT payload 和 CLI 解析。
 
 ## 文档
 
 - [文档索引](docs/README.md)
 - [技术架构与可行性](docs/ARCHITECTURE.md)
 - [接入工具层](docs/ACCESS_LAYER.md)
+- [受控设备接入](docs/ONBOARDING.md)
 - [同类项目与定位](docs/COMPARISON.md)
 - [端侧芯片能力](docs/CHIPS.md)
 - [数据信号采集](docs/SIGNALS.md)
