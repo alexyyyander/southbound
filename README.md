@@ -1,12 +1,33 @@
-# Southbound
+<p align="center">
+  <img src="assets/logo.svg" width="88" alt="Southbound logo">
+</p>
 
-**本地优先的 IoT Agent 南向接入层。**
+<h1 align="center">Southbound</h1>
+
+<p align="center"><strong>本地优先的 IoT Agent 南向接入层</strong></p>
+
+<p align="center">
+  <img alt="version 0.6.0" src="https://img.shields.io/badge/version-0.6.0-0F7D78?style=flat-square">
+  <img alt="Python 3.10+" src="https://img.shields.io/badge/python-3.10%2B-12262F?style=flat-square">
+  <img alt="MIT" src="https://img.shields.io/badge/license-MIT-CF4A29?style=flat-square">
+  <img alt="Alpha" src="https://img.shields.io/badge/status-alpha-70848B?style=flat-square">
+</p>
+
+<p align="center">
+  <a href="docs/DEMO.md">演示</a> ·
+  <a href="docs/ARCHITECTURE.md">架构</a> ·
+  <a href="docs/ACCESS_LAYER.md">接入层</a> ·
+  <a href="docs/ONBOARDING.md">受控接入</a> ·
+  <a href="docs/PROTOCOL.md">协议</a> ·
+  <a href="docs/ABOUT.md">About</a> ·
+  <a href="CONTRIBUTING.md">贡献</a>
+</p>
+
+> **命名**：品牌与文档统一写作 **Southbound**；`southbound` 是 Python 包名、CLI 命令与仓库 slug 的技术标识。
 
 发现局域网设备 → 判断端侧能力 → 受控接入 → 用统一工具调用真实或虚拟设备。
 
 `Southbound` 取 IoT/电信架构里的 *southbound interface*：北向接口面向应用与 agent，南向接口面向设备。这个项目就是 agent 与设备之间的那一层。
-
-`v0.6.0` · Python 3.10+ · MIT · Alpha
 
 ![Southbound 控制台与受控接入表单](docs/dashboard.jpg)
 
@@ -24,6 +45,8 @@
 - 一个 Home Assistant 替代品（HA 可以作为 adapter）；
 - 一个漏洞利用/自传播工具（明确不做）；
 - 一个已经过生产认证的控制系统（Alpha）。
+
+更完整的产品定位、命名由来与边界见 [docs/ABOUT.md](docs/ABOUT.md)。
 
 ## 核心能力
 
@@ -87,6 +110,8 @@ MQTT 适配器需要可选依赖：
 ```bash
 python3 -m pip install -e ".[mqtt]"
 ```
+
+完整演示（面板、CLI、MCP、故障排查）见 [docs/DEMO.md](docs/DEMO.md)。
 
 ## 架构
 
@@ -261,6 +286,8 @@ claude mcp add --scope project southbound -- python3 /path/to/southbound/mcp_ser
 
 旧 `/api/access/*`、`/api/agent` 路径保留为别名。
 
+完整的 northbound/southbound 请求、DeviceBinding/Capability JSON、事件类型与兼容性约定见 [docs/PROTOCOL.md](docs/PROTOCOL.md)。
+
 ## 配置
 
 ```bash
@@ -303,8 +330,9 @@ southbound/
 │   │       ├── home_assistant.py
 │   │       └── mqtt.py
 │   └── web/                 # 观测站面板
+├── assets/                  # Logo、社交预览与品牌说明
 ├── config/access.example.json
-├── docs/                    # 架构、接入层、onboarding、芯片、信号、硬件、扫描
+├── docs/                    # About、架构、协议、演示、接入层、onboarding、芯片、信号、硬件、扫描
 ├── tests/                   # 46 项 unittest
 ├── data/                    # 本地生成，gitignored
 ├── viz_server.py            # 面板兼容入口
@@ -339,6 +367,9 @@ CI 在 Python 3.10–3.13 上跑 ruff、单元测试和 wheel/sdist 构建。
 ## 文档
 
 - [文档索引](docs/README.md)
+- [About Southbound](docs/ABOUT.md) — 项目定位、命名与边界
+- [演示](docs/DEMO.md) — 面板、CLI、MCP 与故障排查
+- [协议与 API](docs/PROTOCOL.md) — northbound/southbound、HTTP、事件与 MCP schema
 - [技术架构与可行性](docs/ARCHITECTURE.md)
 - [接入工具层](docs/ACCESS_LAYER.md)
 - [受控设备接入](docs/ONBOARDING.md)
@@ -347,6 +378,7 @@ CI 在 Python 3.10–3.13 上跑 ruff、单元测试和 wheel/sdist 构建。
 - [数据信号采集](docs/SIGNALS.md)
 - [最小采购与刷机清单](docs/HARDWARE.md)
 - [局域网扫描报告（脱敏示例）](docs/SCAN_REPORT.md)
+- [品牌与图标资源](assets/README.md)
 
 ## 状态与路线图
 
@@ -378,6 +410,10 @@ CI 在 Python 3.10–3.13 上跑 ruff、单元测试和 wheel/sdist 构建。
 - 接入记录不含 token/password；密钥只从环境变量读取。
 - 物理设备的安全、电气与法规责任由使用者承担。
 
+## 贡献
+
+欢迎 issue、PR 和真实硬件验证反馈。开始前请阅读 [CONTRIBUTING.md](CONTRIBUTING.md) 与 [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md)；安全问题走 [SECURITY.md](SECURITY.md)，不要在公开 issue 中粘贴真实网络扫描结果、MAC、IP 或凭据。
+
 ## License
 
-[MIT](LICENSE)
+[MIT](LICENSE)。Logo 与品牌资源见 [assets/README.md](assets/README.md)。

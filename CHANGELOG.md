@@ -6,6 +6,13 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- Repository presentation: Southbound logo, GitHub social preview, brand
+  guide (`assets/README.md`), and About / Demo / Protocol docs.
+- README logo, badges, documentation navigation, naming note, and
+  contribution section; GitHub description and topics.
+
 ## [0.6.0] - 2026-10-26
 
 ### Added

@@ -1,5 +1,8 @@
 # 文档索引
 
+- [About Southbound](ABOUT.md) — 项目定位、命名由来、设计原则与边界
+- [演示](DEMO.md) — 面板、CLI、MCP、受控接入与故障排查
+- [协议与 API](PROTOCOL.md) — northbound/southbound 契约、HTTP、SSE 事件与数据模型
 - [技术架构与可行性](ARCHITECTURE.md) — 组件、数据契约、部署形态、可行性矩阵与路线图
 - [接入工具层](ACCESS_LAYER.md) — 设备/能力模型、策略、审计、适配器、MCP/CLI/HTTP 接口
 - [受控设备接入](ONBOARDING.md) — 发现 → 授权 → 绑定 → Tool Catalog；持久化与安全边界
@@ -8,5 +11,7 @@
 - [数据信号采集](SIGNALS.md) — 协议桥接、无线嗅探、物理量
 - [最小采购与刷机清单](HARDWARE.md) — ESP32 / Zigbee / Matter 的 BOM、接线、刷机与配网
 - [最近一次扫描报告](SCAN_REPORT.md) — 192.168.1.0/24 的实测结果、风险与下一步
+
+品牌与图标资源见 [assets/README.md](../assets/README.md)。
 
 ![局域网观测站面板](dashboard.jpg)

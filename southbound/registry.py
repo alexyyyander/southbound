@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Device classification heuristics for the Southbound.
+"""Device classification heuristics for Southbound.
 
 The goal is not precise fingerprinting: it is to answer two practical
 questions for every device seen on the LAN:

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""LAN inventory collector for the Southbound.
+"""LAN inventory collector for Southbound.
 
 Collects, using only local-network metadata:
 

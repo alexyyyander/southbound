@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-label="Southbound logo">
+  <rect width="256" height="256" rx="28" fill="#E8EDEE"/>
+  <rect x="6" y="6" width="244" height="244" rx="24" fill="none" stroke="#12262F" stroke-width="2"/>
+
+  <g stroke="#12262F" stroke-width="1.5" opacity="0.14">
+    <path d="M32 64h192M32 128h192M32 192h192M64 32v192M128 32v192M192 32v192"/>
+  </g>
+
+  <path d="M128 54v128" stroke="#CF4A29" stroke-width="10" stroke-linecap="round"/>
+  <path d="M98 154l30 32 30-32" fill="none" stroke="#CF4A29" stroke-width="10" stroke-linecap="round" stroke-linejoin="round"/>
+
+  <circle cx="128" cy="48" r="18" fill="#0F7D78" stroke="#E8EDEE" stroke-width="4"/>
+  <circle cx="128" cy="48" r="6.5" fill="#E8EDEE"/>
+
+  <g fill="#12262F">
+    <rect x="58" y="196" width="30" height="20" rx="3"/>
+    <rect x="113" y="204" width="30" height="20" rx="3"/>
+    <rect x="168" y="196" width="30" height="20" rx="3"/>
+  </g>
+  <g stroke="#12262F" stroke-width="2" opacity="0.45">
+    <path d="M128 186v10"/>
+    <path d="M88 196l30-12"/>
+    <path d="M168 196l-30-12"/>
+  </g>
+</svg>

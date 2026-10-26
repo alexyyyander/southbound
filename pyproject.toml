@@ -13,12 +13,17 @@ authors = [{ name = "Alex Yu" }]
 keywords = [
   "iot",
   "mcp",
+  "model-context-protocol",
   "home-automation",
   "local-first",
   "matter",
   "zigbee",
   "esp32",
   "ai-agents",
+  "smart-home",
+  "device-management",
+  "access-control",
+  "agent-tooling",
 ]
 classifiers = [
   "Development Status :: 3 - Alpha",
@@ -44,6 +49,8 @@ southbound = "southbound.cli:main"
 
 [project.urls]
 Repository = "https://github.com/alexyyyander/southbound"
+Documentation = "https://github.com/alexyyyander/southbound/blob/main/docs/README.md"
+Changelog = "https://github.com/alexyyyander/southbound/blob/main/CHANGELOG.md"
 
 [tool.setuptools.packages.find]
 where = ["."]
