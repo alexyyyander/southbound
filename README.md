@@ -122,7 +122,7 @@ export HA_TOKEN="..."
 |---|---|
 | `southbound discover --sweep` | 发现设备并写入 `data/inventory.json` |
 | `southbound scan --sweep` | 端口扫描（大网段建议 `--hosts` 定向） |
-| `southbound scan --hosts 192.168.1.2,192.168.1.20 --full` | 只扫关键设备 |
+| `southbound scan --hosts 192.168.1.10,192.168.1.20 --full` | 只扫关键设备 |
 | `southbound agent "哪些设备能跑 agent"` | 基于 inventory 的问答与接入方案 |
 | `southbound intent "打开客厅灯"` | northbound intent → southbound 动作 + trace |
 | `southbound serve` | 启动 Southbound runtime + 可视化面板 |

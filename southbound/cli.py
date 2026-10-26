@@ -3,7 +3,7 @@
 
 southbound discover --sweep
 southbound scan --sweep
-southbound scan --hosts 192.168.1.2,192.168.1.20 --full
+southbound scan --hosts 192.168.1.10,192.168.1.20 --full
 southbound agent "哪些设备能跑 agent"
 southbound intent "打开客厅灯并关掉书房插座"
 southbound serve

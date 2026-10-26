@@ -1,5 +1,5 @@
 PY ?= python3
-HOSTS ?= 192.168.1.2,192.168.1.20,192.168.1.40
+HOSTS ?= 192.168.1.10,192.168.1.20,192.168.1.40
 
 .PHONY: help demo discover scan agent sim mcp test lint build clean
 

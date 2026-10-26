@@ -4,6 +4,7 @@ __pycache__/
 data/*.json
 data/*.jsonl
 data/oui.csv
+data/*.local.*
 config/access.local.json
 .pytest_cache/
 .venv/
