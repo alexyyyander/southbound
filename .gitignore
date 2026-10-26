@@ -7,3 +7,6 @@ data/oui.csv
 config/access.local.json
 .pytest_cache/
 .venv/
+*.egg-info/
+build/
+dist/
