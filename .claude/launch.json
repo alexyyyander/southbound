@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "iot-lab-demo",
+      "runtimeExecutable": "python3",
+      "runtimeArgs": ["viz_server.py"],
+      "port": 8765
+    }
+  ]
+}

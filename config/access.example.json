@@ -1,0 +1,74 @@
+{
+  "policy": {
+    "mode": "supervised",
+    "allow_high_risk": false,
+    "allowed_rooms": null,
+    "allowed_kinds": null,
+    "allowed_adapters": null
+  },
+  "adapters": {
+    "sim": {
+      "enabled": true
+    },
+    "home_assistant": {
+      "enabled": false,
+      "base_url": "http://homeassistant.local:8123",
+      "token_env": "HA_TOKEN",
+      "timeout": 4.0,
+      "devices": [
+        {
+          "device_id": "ha:light.living_room",
+          "name": "客厅灯",
+          "kind": "light",
+          "entity_id": "light.living_room",
+          "room": "客厅",
+          "tier": "T1",
+          "protocol": "Matter",
+          "capabilities": ["turn_on", "turn_off", "toggle", "set_brightness", "read"],
+          "safe_to_automate": false
+        },
+        {
+          "device_id": "ha:lock.front_door",
+          "name": "入户门锁",
+          "kind": "lock",
+          "entity_id": "lock.front_door",
+          "room": "玄关",
+          "tier": "T1",
+          "protocol": "Matter",
+          "capabilities": ["lock", "unlock", "read"],
+          "safe_to_automate": false
+        }
+      ]
+    },
+    "zigbee2mqtt": {
+      "enabled": false,
+      "host": "127.0.0.1",
+      "port": 1883,
+      "username_env": "MQTT_USERNAME",
+      "password_env": "MQTT_PASSWORD",
+      "timeout": 4.0,
+      "devices": [
+        {
+          "device_id": "z2m:living_plug",
+          "name": "客厅插座",
+          "kind": "plug",
+          "friendly_name": "living_plug",
+          "room": "客厅",
+          "tier": "T1",
+          "protocol": "Zigbee",
+          "capabilities": ["turn_on", "turn_off", "toggle", "read"],
+          "safe_to_automate": false
+        }
+      ]
+    },
+    "mqtt": {
+      "enabled": false,
+      "host": "127.0.0.1",
+      "port": 1883,
+      "username_env": "MQTT_USERNAME",
+      "password_env": "MQTT_PASSWORD",
+      "timeout": 4.0,
+      "devices": []
+    }
+  }
+}
