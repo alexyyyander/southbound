@@ -71,7 +71,7 @@ iot-lab mcp
 | `agent.py` | 基于 inventory 的确定性问答与接入方案 | 可用 |
 | `simulator.py` | 六个虚拟设备（灯、插座、温湿度、窗帘、门磁、净化器），三种协议 | 可用 |
 | `sim_agent.py` | 目标拆分 → 设备匹配 → 动作 → 回读，输出可展示的 trace | 可用 |
-| `viz_server.py` | 本地面板 HTTP API，绑定 `127.0.0.1`；模拟器操作经 AccessHub | 可用 |
+| `viz_server.py` | 本地面板 HTTP API，绑定 `127.0.0.1`；模拟器操作与 agent demo 经 AccessHub | 可用 |
 | `mcp_server.py` | stdio MCP，13 个工具：发现、深扫、模拟器、接入层 | 可用 |
 | `cli.py` / `iotlab.py` | 统一 CLI，含 `tools` / `call` / `access` | 可用 |
 | `access/` | 设备/能力模型、参数校验、策略、审计、AccessHub、四类 adapter | 可用 |

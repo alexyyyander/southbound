@@ -33,6 +33,40 @@ SIM = Simulator()
 HUB = build_hub(simulator=SIM)
 
 
+class HubRuntime:
+    """Expose the simulator to the demo planner through the access layer.
+
+    The planner keeps calling `list_devices()` / `act()`; `act()` is routed
+    through AccessHub so policy and audit apply to every demo action.
+    """
+
+    def __init__(self, simulator: Simulator, hub) -> None:
+        self.simulator = simulator
+        self.hub = hub
+
+    def list_devices(self) -> list[dict]:
+        return self.simulator.list_devices()
+
+    def get_device(self, device_id: str) -> dict:
+        return self.simulator.get_device(device_id)
+
+    def act(self, device_id: str, action: str, value=None) -> dict:
+        arguments = {}
+        if action == "set_brightness":
+            arguments = {"brightness": value}
+        elif action == "set_position":
+            arguments = {"position": value}
+        elif action == "set_mode":
+            arguments = {"mode": value}
+        elif action == "set_temperature":
+            arguments = {"temperature": value}
+        self.hub.call(device_id, action, arguments)
+        return self.simulator.get_device(device_id)
+
+
+AGENT_RUNTIME = HubRuntime(SIM, HUB)
+
+
 def _load_json(name: str) -> dict:
     path = DATA_DIR / name
     if not path.exists():
@@ -82,7 +116,7 @@ class Handler(BaseHTTPRequestHandler):
         body = self._body()
         if path == "/api/agent":
             goal = str(body.get("goal", "")).strip()
-            self._json(run_goal(goal, SIM))
+            self._json(run_goal(goal, AGENT_RUNTIME))
             return
         if path == "/api/sim/reset":
             SIM.reset()

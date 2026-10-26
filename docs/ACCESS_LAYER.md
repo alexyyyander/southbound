@@ -246,7 +246,7 @@ python3 iotlab.py call ha:lock.front_door unlock --confirm
 - `GET /api/access/audit`
 - `POST /api/access/call`
 
-面板的模拟端点操作也走 `AccessHub`，因此会经过策略和审计。
+面板的模拟端点操作和 agent 控制台动作都经 `AccessHub`，因此会经过策略和审计。
 
 ## 8. 扩展一个新 adapter
 

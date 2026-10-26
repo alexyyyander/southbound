@@ -10,9 +10,16 @@ tool-selection loop rather than a single opaque answer.
 from __future__ import annotations
 
 import re
-from typing import Any
+from typing import Any, Protocol
 
-from .simulator import Simulator
+
+class DeviceRuntime(Protocol):
+    """Minimal runtime surface used by the deterministic demo planner."""
+
+    def list_devices(self) -> list[dict]: ...
+
+    def act(self, device_id: str, action: str, value: Any = None) -> dict: ...
+
 
 ROOMS = (
     "客厅",
@@ -62,7 +69,7 @@ def _room_for(clause: str) -> str | None:
     return None
 
 
-def _find_device(sim: Simulator, clause: str, kind: str | None) -> dict | None:
+def _find_device(sim: DeviceRuntime, clause: str, kind: str | None) -> dict | None:
     devices = sim.list_devices()
     room = _room_for(clause)
     candidates = [device for device in devices if not kind or device["kind"] == kind]
@@ -143,7 +150,7 @@ def describe(device: dict) -> str:
     return f"{name}：{state}"
 
 
-def run_goal(goal: str, sim: Simulator) -> dict:
+def run_goal(goal: str, sim: DeviceRuntime) -> dict:
     goal = (goal or "").strip()
     steps: list[dict] = []
     affected: list[dict] = []
