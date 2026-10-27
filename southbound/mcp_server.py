@@ -47,21 +47,25 @@ from .paths import DATA_DIR
 from .runtime import SouthboundRuntime
 
 REMOTE_ENV = "SOUTHBOUND_REMOTE_URL"
+REMOTE_TOKEN_ENV = "SOUTHBOUND_REMOTE_TOKEN"
 
 
 def _make_runtime() -> SouthboundRuntime | RemoteRuntime:
     remote = os.environ.get(REMOTE_ENV)
     if remote:
-        return RemoteRuntime(remote)
+        return RemoteRuntime(remote, token=os.environ.get(REMOTE_TOKEN_ENV, ""))
     return SouthboundRuntime(store=CommissionStore(DATA_DIR / "commissioned.json"))
 
 
-def configure(remote: str | None = None) -> None:
+def configure(remote: str | None = None, token: str | None = None) -> None:
     """Switch the MCP process between embedded and shared runtime mode."""
     global RUNTIME, SIM, HUB
     previous = RUNTIME
     if remote:
-        RUNTIME = RemoteRuntime(remote)
+        RUNTIME = RemoteRuntime(
+            remote,
+            token=token if token is not None else os.environ.get(REMOTE_TOKEN_ENV, ""),
+        )
         SIM = None
         HUB = None
     else:
@@ -78,7 +82,7 @@ SIM = getattr(RUNTIME, "simulator", None)
 HUB = getattr(RUNTIME, "hub", None)
 
 SERVER_NAME = "southbound"
-SERVER_VERSION = "0.10.0"
+SERVER_VERSION = "0.11.0"
 DEFAULT_PROTOCOL = "2024-11-05"
 
 TOOLS = [

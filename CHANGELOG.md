@@ -6,6 +6,22 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.11.0] - 2026-10-27
+
+### Added
+
+- Optional Bearer-token authentication for the shared runtime service.
+  Loopback clients remain exempt; non-loopback API clients need
+  `SOUTHBOUND_REMOTE_TOKEN`; non-loopback binds without a token are refused.
+- `southbound serve --token`, `southbound mcp --token`, and the corresponding
+  environment variables.
+- Tests for the auth helper and token header propagation (89 tests total).
+
+### Changed
+
+- Remote MCP/CLI docs now show token configuration; TLS and multi-user
+  identity remain future work.
+
 ## [0.10.0] - 2026-10-27
 
 ### Added

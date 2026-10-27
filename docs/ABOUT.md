@@ -48,9 +48,9 @@
 
 ## 状态
 
-- 版本：`0.10.0`
+- 版本：`0.11.0`
 - 阶段：Alpha
-- 测试：85 项标准库 unittest
+- 测试：89 项标准库 unittest
 - 许可：MIT
 
 相关文档：[架构](ARCHITECTURE.md)、[接入层](ACCESS_LAYER.md)、[受控接入](ONBOARDING.md)、[协议](PROTOCOL.md)、[演示](DEMO.md)。

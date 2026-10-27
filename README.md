@@ -7,7 +7,7 @@
 <p align="center"><strong>本地优先的 IoT Agent 南向接入层</strong></p>
 
 <p align="center">
-  <img alt="version 0.10.0" src="https://img.shields.io/badge/version-0.10.0-0F7D78?style=flat-square">
+  <img alt="version 0.11.0" src="https://img.shields.io/badge/version-0.11.0-0F7D78?style=flat-square">
   <img alt="Python 3.10+" src="https://img.shields.io/badge/python-3.10%2B-12262F?style=flat-square">
   <img alt="MIT" src="https://img.shields.io/badge/license-MIT-CF4A29?style=flat-square">
   <img alt="Alpha" src="https://img.shields.io/badge/status-alpha-70848B?style=flat-square">
@@ -60,7 +60,7 @@
 | **受控 onboarding** | 发现 → 授权 → 绑定 adapter/策略 → 工具目录；支持撤销与持久化 |
 | **多协议 adapter** | Simulator、Home Assistant REST、MQTT、Zigbee2MQTT、BLE GATT、NFC；BLE/NFC 已通过模拟与驱动替身测试，待硬件验收 |
 | **运行时与事件流** | SouthboundRuntime + EventBus + SSE；`serve` 可作为共享 runtime，MCP/CLI 通过 `SOUTHBOUND_REMOTE_URL` 连接 |
-| **共享 runtime** | 一个设备图、策略和审计供 Dashboard / MCP / CLI 共用；支持 `southbound mcp --remote` |
+| **共享 runtime** | 一个设备图、策略和审计供 Dashboard / MCP / CLI 共用；支持 `southbound mcp --remote` 与 Bearer token |
 | **2.5D 房间实验** | `GET /scene`：可移动 avatar、presence 信号、点击设备、自动反射与回读验证 |
 | **Splat 预览** | `/scene` 内切换 WebGL 合成 splat：轨道旋转、设备热点、avatar 投影；同一控制层 |
 | **可视化** | 网络拓扑、设备清单、模拟端点、Agent 控制台、接入表单 |
@@ -270,7 +270,7 @@ Southbound 的“扩散”是 **受控接入**，不是把 agent 代码复制到
 | `southbound scan --hosts 192.168.1.10,192.168.1.20 --full` | 只扫关键设备 |
 | `southbound agent "哪些设备能跑 agent"` | 基于 inventory 的问答与接入方案 |
 | `southbound intent "打开客厅灯"` | northbound 意图 → southbound 动作 + trace |
-| `southbound serve` | 启动运行时与可视化面板；可作为共享 runtime service |
+| `southbound serve --token ...` | 启动共享 runtime；非 loopback API 需要 Bearer token |
 | `SOUTHBOUND_REMOTE_URL=... southbound call ...` | CLI 连接共享 runtime 执行能力 |
 | `southbound tools` | 接入层能力目录 |
 | `southbound call <device> <capability>` | 通过策略与审计执行能力 |
@@ -383,7 +383,7 @@ southbound/
 ├── config/access.example.json
 ├── deploy/systemd/          # Pi 常驻 harness 示例
 ├── docs/                    # About、架构、协议、演示、harness、接入层、onboarding、芯片、信号、硬件、扫描
-├── tests/                   # 85 项 unittest
+├── tests/                   # 89 项 unittest
 ├── data/                    # 本地生成，gitignored
 ├── viz_server.py            # 面板兼容入口
 ├── mcp_server.py            # MCP 兼容入口
@@ -410,7 +410,7 @@ make lint     # ruff check .
 make build    # wheel + sdist
 ```
 
-当前 85 项标准库测试覆盖分级规则、模拟器、agent 目标拆分、能力校验、策略、审计、工具目录、运行时/事件总线、远程 runtime client、受控接入与持久化、2.5D 场景 presence/自动验证、survey 解析/readiness、HA 适配器映射、MQTT payload 和 CLI 解析，以及适配器注册、BLE/NFC 模拟读写、设备事件、驱动边界和资源释放。
+当前 89 项标准库测试覆盖分级规则、模拟器、agent 目标拆分、能力校验、策略、审计、工具目录、运行时/事件总线、远程 runtime client/token、受控接入与持久化、2.5D 场景 presence/自动验证、survey 解析/readiness、HA 适配器映射、MQTT payload 和 CLI 解析，以及适配器注册、BLE/NFC 模拟读写、设备事件、驱动边界和资源释放。
 
 CI 在 Python 3.10–3.13 上跑 ruff、单元测试和 wheel/sdist 构建。
 
@@ -449,7 +449,7 @@ CI 在 Python 3.10–3.13 上跑 ruff、单元测试和 wheel/sdist 构建。
 - WebGL 合成 splat 预览：轨道相机、设备热点、avatar 投影；
 - 无主机 `survey`：Wi-Fi/BLE/radio 证据、服务指纹、Pi/Linux 支持、readiness 报告；
 - 15 个 MCP 工具；
-- 85 项测试、CI、wheel/sdist。
+- 89 项测试、CI、wheel/sdist。
 
 **下一步**
 

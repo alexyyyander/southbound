@@ -26,6 +26,7 @@ from __future__ import annotations
 import argparse
 import json
 import mimetypes
+import os
 import queue
 import webbrowser
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -36,6 +37,7 @@ from .access.errors import AccessError
 from .paths import DATA_DIR, WEB_DIR
 from .runtime import SouthboundRuntime
 from .scene import SceneController
+from .service_auth import is_authorized
 
 RUNTIME = SouthboundRuntime(store=CommissionStore(DATA_DIR / "commissioned.json"))
 SIM = RUNTIME.simulator
@@ -54,14 +56,37 @@ def _load_json(name: str) -> dict:
 
 
 class Handler(BaseHTTPRequestHandler):
-    server_version = "SouthboundDemo/0.10"
+    server_version = "SouthboundDemo/0.11"
 
     def log_message(self, fmt: str, *args) -> None:  # keep stdout clean
         print(f"[viz] {self.address_string()} {fmt % args}", flush=True)
 
+    def _authorized(self, path: str) -> bool:
+        if not path.startswith("/api/"):
+            return True
+        token = getattr(self.server, "runtime_token", "")
+        return is_authorized(
+            self.client_address[0],
+            self.headers.get("Authorization"),
+            token,
+        )
+
+    def _unauthorized(self) -> None:
+        self._json(
+            {
+                "ok": False,
+                "error": "runtime token required",
+                "auth": "Bearer",
+            },
+            status=401,
+        )
+
     def do_GET(self) -> None:
         parsed = urlparse(self.path)
         path = parsed.path
+        if not self._authorized(path):
+            self._unauthorized()
+            return
         if path == "/api/health":
             self._json(
                 {
@@ -130,6 +155,9 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_POST(self) -> None:
         path = urlparse(self.path).path
+        if not self._authorized(path):
+            self._unauthorized()
+            return
         body = self._body()
         if path in ("/api/agent", "/api/northbound/intent"):
             goal = str(body.get("goal", "")).strip()
@@ -319,12 +347,23 @@ class Handler(BaseHTTPRequestHandler):
 
 
 def serve(
-    host: str = "127.0.0.1", port: int = 8765, open_browser: bool = False
+    host: str = "127.0.0.1",
+    port: int = 8765,
+    open_browser: bool = False,
+    token: str = "",
 ) -> None:
+    loopback = host in ("127.0.0.1", "localhost", "::1")
+    if not loopback and not token:
+        raise ValueError(
+            "non-loopback runtime service requires --token or SOUTHBOUND_RUNTIME_TOKEN"
+        )
     server = ThreadingHTTPServer((host, port), Handler)
+    server.runtime_token = token
     url = f"http://{host}:{port}/"
     print(f"Southbound demo running at {url}", flush=True)
     print(f"Southbound 2.5D room at {url}scene", flush=True)
+    if token:
+        print("Runtime API token required for non-loopback clients", flush=True)
     if open_browser:
         webbrowser.open(url)
     try:
@@ -343,8 +382,13 @@ def main() -> None:
     parser.add_argument(
         "--open", action="store_true", help="open the dashboard in a browser"
     )
+    parser.add_argument(
+        "--token",
+        default=os.environ.get("SOUTHBOUND_RUNTIME_TOKEN", ""),
+        help="bearer token required for non-loopback API clients",
+    )
     args = parser.parse_args()
-    serve(args.host, args.port, args.open)
+    serve(args.host, args.port, args.open, args.token)
 
 
 if __name__ == "__main__":

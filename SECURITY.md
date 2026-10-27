@@ -4,7 +4,7 @@
 
 | Version | Supported |
 |---|---|
-| 0.10.x | Yes |
+| 0.11.x | Yes |
 | < 0.6 | No |
 
 ## Scene demo

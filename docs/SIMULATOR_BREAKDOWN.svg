@@ -44,7 +44,7 @@
   <rect x="20" y="20" width="1560" height="1080" fill="none" stroke="#12262F" stroke-width="2"/>
   <rect x="20" y="20" width="1560" height="8" fill="#CF4A29"/>
 
-  <text x="50" y="58" class="kicker">SOUTHBOUND / SUBSYSTEM 01 · SIMULATOR · v0.10.0</text>
+  <text x="50" y="58" class="kicker">SOUTHBOUND / SUBSYSTEM 01 · SIMULATOR · v0.11.0</text>
   <text x="50" y="101" class="title">Simulator / Exploded View</text>
   <text x="50" y="128" class="subtitle">虚拟设备、确定性 agent loop 与同一套 AccessHub 合约。没有 radio、没有物理设备、没有云端。</text>
   <text x="1550" y="58" text-anchor="end" class="mono-small">CONTRACT TEST RIG</text>

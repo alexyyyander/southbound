@@ -9,6 +9,7 @@ from southbound.client import RemoteAccessError, RemoteRuntime
 
 class FakeRuntimeHandler(BaseHTTPRequestHandler):
     requests: list[tuple[str, str, dict]] = []
+    auth_headers: list[str | None] = []
 
     def log_message(self, *_args) -> None:
         pass
@@ -24,6 +25,7 @@ class FakeRuntimeHandler(BaseHTTPRequestHandler):
     def do_GET(self) -> None:
         parsed = urlparse(self.path)
         self.requests.append(("GET", parsed.path, {}))
+        self.auth_headers.append(self.headers.get("Authorization"))
         if parsed.path == "/api/northbound/status":
             self._json({"devices": 2, "runtime": {"events": 3}})
             return
@@ -90,6 +92,7 @@ class RemoteRuntimeTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
         FakeRuntimeHandler.requests = []
+        FakeRuntimeHandler.auth_headers = []
         cls.server = ThreadingHTTPServer(("127.0.0.1", 0), FakeRuntimeHandler)
         cls.thread = threading.Thread(target=cls.server.serve_forever, daemon=True)
         cls.thread.start()
@@ -103,7 +106,13 @@ class RemoteRuntimeTest(unittest.TestCase):
 
     def setUp(self) -> None:
         FakeRuntimeHandler.requests = []
+        FakeRuntimeHandler.auth_headers = []
         self.runtime = RemoteRuntime(self.base_url)
+
+    def test_bearer_token_is_sent(self) -> None:
+        runtime = RemoteRuntime(self.base_url, token="s3cret")
+        runtime.status()
+        self.assertEqual(FakeRuntimeHandler.auth_headers[-1], "Bearer s3cret")
 
     def test_read_surface(self) -> None:
         self.assertEqual(self.runtime.status()["devices"], 2)

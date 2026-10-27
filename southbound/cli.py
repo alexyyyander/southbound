@@ -35,7 +35,9 @@ _RUNTIMES: list[SouthboundRuntime | RemoteRuntime] = []
 def _runtime() -> SouthboundRuntime | RemoteRuntime:
     remote = os.environ.get("SOUTHBOUND_REMOTE_URL")
     if remote:
-        runtime: SouthboundRuntime | RemoteRuntime = RemoteRuntime(remote)
+        runtime: SouthboundRuntime | RemoteRuntime = RemoteRuntime(
+            remote, token=os.environ.get("SOUTHBOUND_REMOTE_TOKEN", "")
+        )
     else:
         runtime = SouthboundRuntime(
             store=CommissionStore(DATA_DIR / "commissioned.json")
@@ -134,14 +136,20 @@ def cmd_intent(args: argparse.Namespace) -> int:
 
 
 def cmd_demo(args: argparse.Namespace) -> int:
-    viz_server.serve(host=args.host, port=args.port, open_browser=args.open)
+    viz_server.serve(
+        host=args.host,
+        port=args.port,
+        open_browser=args.open,
+        token=getattr(args, "token", ""),
+    )
     return 0
 
 
 def cmd_mcp(args: argparse.Namespace) -> int:
     remote = getattr(args, "remote", "") or os.environ.get("SOUTHBOUND_REMOTE_URL")
+    token = getattr(args, "token", "") or os.environ.get("SOUTHBOUND_REMOTE_TOKEN", "")
     if remote:
-        mcp_server.configure(remote)
+        mcp_server.configure(remote, token)
     mcp_server.main()
     return 0
 
@@ -365,12 +373,22 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--host", default="127.0.0.1")
     p.add_argument("--port", type=int, default=8765)
     p.add_argument("--open", action="store_true")
+    p.add_argument(
+        "--token",
+        default=os.environ.get("SOUTHBOUND_RUNTIME_TOKEN", ""),
+        help="bearer token for non-loopback API clients",
+    )
     p.set_defaults(func=cmd_demo)
 
     p = sub.add_parser("demo", help="serve the visual dashboard")
     p.add_argument("--host", default="127.0.0.1")
     p.add_argument("--port", type=int, default=8765)
     p.add_argument("--open", action="store_true")
+    p.add_argument(
+        "--token",
+        default=os.environ.get("SOUTHBOUND_RUNTIME_TOKEN", ""),
+        help="bearer token for non-loopback API clients",
+    )
     p.set_defaults(func=cmd_demo)
 
     p = sub.add_parser("mcp", help="run the stdio MCP server")
@@ -378,6 +396,11 @@ def build_parser() -> argparse.ArgumentParser:
         "--remote",
         default="",
         help="use a shared runtime service, e.g. http://127.0.0.1:8765",
+    )
+    p.add_argument(
+        "--token",
+        default=os.environ.get("SOUTHBOUND_REMOTE_TOKEN", ""),
+        help="bearer token for the shared runtime",
     )
     p.set_defaults(func=cmd_mcp)
 

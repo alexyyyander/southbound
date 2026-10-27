@@ -42,13 +42,14 @@ class RemoteRuntime:
     locally; the service owns AccessHub, policy, audit, and adapter execution.
     """
 
-    def __init__(self, base_url: str, timeout: float = 10.0) -> None:
+    def __init__(self, base_url: str, timeout: float = 10.0, token: str = "") -> None:
         base_url = (base_url or "").strip().rstrip("/")
         parsed = urllib.parse.urlparse(base_url)
         if parsed.scheme not in ("http", "https") or not parsed.netloc:
             raise ValueError("remote runtime URL must be http(s)://host:port")
         self.base_url = base_url
         self.timeout = timeout
+        self.token = (token or "").strip()
 
     def _request(
         self,
@@ -59,6 +60,8 @@ class RemoteRuntime:
         url = f"{self.base_url}{path}"
         data = None
         headers = {"Accept": "application/json"}
+        if self.token:
+            headers["Authorization"] = f"Bearer {self.token}"
         if payload is not None:
             data = json.dumps(payload, ensure_ascii=False).encode("utf-8")
             headers["Content-Type"] = "application/json"
