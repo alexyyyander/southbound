@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "southbound"
-version = "0.8.0"
+version = "0.10.0"
 description = "Southbound: local-first access layer for IoT agents"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -42,6 +42,9 @@ dependencies = []
 
 [project.optional-dependencies]
 mqtt = ["paho-mqtt>=2.0"]
+survey = ["bleak>=0.22"]
+ble = ["bleak>=0.22"]
+nfc = ["nfcpy>=1.0.4"]
 dev = ["build>=1.2", "ruff>=0.6"]
 
 [project.scripts]

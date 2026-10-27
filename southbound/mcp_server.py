@@ -31,23 +31,54 @@ from __future__ import annotations
 import contextlib
 import io
 import json
+import os
 import sys
 
 from . import agent
 from . import deep_scan as deep
+from .access.capabilities import CAPABILITIES
+from .access.registry import REGISTRY
 from .access.commissioning import CommissionStore
 from .access.errors import AccessError
+from .client import RemoteRuntime
 from .deep_scan import DEFAULT_OUT as DEEP_OUT
 from .discover import DEFAULT_OUT, discover, print_inventory
 from .paths import DATA_DIR
 from .runtime import SouthboundRuntime
 
-RUNTIME = SouthboundRuntime(store=CommissionStore(DATA_DIR / "commissioned.json"))
-SIM = RUNTIME.simulator
-HUB = RUNTIME.hub
+REMOTE_ENV = "SOUTHBOUND_REMOTE_URL"
+
+
+def _make_runtime() -> SouthboundRuntime | RemoteRuntime:
+    remote = os.environ.get(REMOTE_ENV)
+    if remote:
+        return RemoteRuntime(remote)
+    return SouthboundRuntime(store=CommissionStore(DATA_DIR / "commissioned.json"))
+
+
+def configure(remote: str | None = None) -> None:
+    """Switch the MCP process between embedded and shared runtime mode."""
+    global RUNTIME, SIM, HUB
+    previous = RUNTIME
+    if remote:
+        RUNTIME = RemoteRuntime(remote)
+        SIM = None
+        HUB = None
+    else:
+        RUNTIME = SouthboundRuntime(
+            store=CommissionStore(DATA_DIR / "commissioned.json")
+        )
+        SIM = RUNTIME.simulator
+        HUB = RUNTIME.hub
+    previous.close()
+
+
+RUNTIME: SouthboundRuntime | RemoteRuntime = _make_runtime()
+SIM = getattr(RUNTIME, "simulator", None)
+HUB = getattr(RUNTIME, "hub", None)
 
 SERVER_NAME = "southbound"
-SERVER_VERSION = "0.8.0"
+SERVER_VERSION = "0.10.0"
 DEFAULT_PROTOCOL = "2024-11-05"
 
 TOOLS = [
@@ -255,22 +286,13 @@ TOOLS = [
             "properties": {
                 "adapter": {
                     "type": "string",
-                    "enum": ["sim", "home_assistant", "mqtt", "zigbee2mqtt"],
+                    "enum": REGISTRY.names(),
                 },
                 "device_id": {"type": "string"},
                 "name": {"type": "string"},
                 "kind": {
                     "type": "string",
-                    "enum": [
-                        "light",
-                        "plug",
-                        "cover",
-                        "sensor",
-                        "binary_sensor",
-                        "purifier",
-                        "thermostat",
-                        "lock",
-                    ],
+                    "enum": list(CAPABILITIES),
                 },
                 "room": {"type": "string"},
                 "protocol": {"type": "string"},
@@ -285,6 +307,10 @@ TOOLS = [
                 "command_topic": {"type": "string"},
                 "state_topic": {"type": "string"},
                 "state": {"type": "object"},
+                "connection": {
+                    "type": "object",
+                    "description": "BLE: address/read_char/write_char/notify_char; NFC: path",
+                },
                 "safe_to_automate": {"type": "boolean", "default": False},
                 "confirm": {
                     "type": "boolean",
@@ -385,7 +411,10 @@ def _tool_deep_scan(arguments: dict) -> dict:
 
 
 def _tool_sim_devices(_arguments: dict) -> dict:
-    payload = {"devices": SIM.list_devices(), "summary": SIM.summary()}
+    if hasattr(RUNTIME, "sim_devices"):
+        payload = RUNTIME.sim_devices()
+    else:
+        payload = {"devices": SIM.list_devices(), "summary": SIM.summary()}
     return _text_result(json.dumps(payload, ensure_ascii=False, indent=2))
 
 
@@ -401,8 +430,11 @@ def _tool_sim_action(arguments: dict) -> dict:
     elif action == "set_mode":
         call_arguments = {"mode": value}
     try:
-        RUNTIME.call(device_id, action, call_arguments)
-        device = SIM.get_device(device_id)
+        if hasattr(RUNTIME, "sim_action"):
+            device = RUNTIME.sim_action(device_id, action, value)
+        else:
+            RUNTIME.call(device_id, action, call_arguments)
+            device = SIM.get_device(device_id)
     except (AccessError, KeyError, ValueError) as exc:
         return _text_result(str(exc), is_error=True)
     return _text_result(json.dumps(device, ensure_ascii=False, indent=2))
@@ -539,6 +571,9 @@ def handle(request: dict) -> dict | None:
     if method == "ping":
         return {"jsonrpc": "2.0", "id": req_id, "result": {}}
     if method == "tools/list":
+        commission = next(tool for tool in TOOLS if tool["name"] == "iot_commission")
+        commission["inputSchema"]["properties"]["adapter"]["enum"] = REGISTRY.names()
+        commission["inputSchema"]["properties"]["kind"]["enum"] = list(CAPABILITIES)
         return {"jsonrpc": "2.0", "id": req_id, "result": {"tools": TOOLS}}
     if method == "tools/call":
         name = params.get("name", "")
@@ -565,18 +600,21 @@ def handle(request: dict) -> dict | None:
 
 
 def main() -> None:
-    for line in sys.stdin:
-        line = line.strip()
-        if not line:
-            continue
-        try:
-            request = json.loads(line)
-        except json.JSONDecodeError:
-            continue
-        response = handle(request)
-        if response is not None:
-            sys.stdout.write(json.dumps(response, ensure_ascii=False) + "\n")
-            sys.stdout.flush()
+    try:
+        for line in sys.stdin:
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                request = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            response = handle(request)
+            if response is not None:
+                sys.stdout.write(json.dumps(response, ensure_ascii=False) + "\n")
+                sys.stdout.flush()
+    finally:
+        RUNTIME.close()
 
 
 if __name__ == "__main__":

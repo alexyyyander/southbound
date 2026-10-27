@@ -15,19 +15,33 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 from pathlib import Path
 
 from . import agent as agent_module
-from . import deep_scan, discover, mcp_server, viz_server
+from . import deep_scan, discover, mcp_server, survey, viz_server
+from .access.capabilities import CAPABILITIES
+from .access.registry import REGISTRY
 from .access.commissioning import CommissionStore
 from .access.errors import AccessError
+from .client import RemoteRuntime
 from .paths import DATA_DIR
 from .runtime import SouthboundRuntime
 
+_RUNTIMES: list[SouthboundRuntime | RemoteRuntime] = []
 
-def _runtime() -> SouthboundRuntime:
-    return SouthboundRuntime(store=CommissionStore(DATA_DIR / "commissioned.json"))
+
+def _runtime() -> SouthboundRuntime | RemoteRuntime:
+    remote = os.environ.get("SOUTHBOUND_REMOTE_URL")
+    if remote:
+        runtime: SouthboundRuntime | RemoteRuntime = RemoteRuntime(remote)
+    else:
+        runtime = SouthboundRuntime(
+            store=CommissionStore(DATA_DIR / "commissioned.json")
+        )
+    _RUNTIMES.append(runtime)
+    return runtime
 
 
 def cmd_discover(args: argparse.Namespace) -> int:
@@ -67,6 +81,29 @@ def cmd_scan(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_survey(args: argparse.Namespace) -> int:
+    result = survey.survey(
+        sweep=args.sweep,
+        use_mdns=not args.no_mdns,
+        use_ssdp=not args.no_ssdp,
+        ports=not args.no_ports,
+        ble=args.ble,
+        ble_seconds=args.ble_seconds,
+        wifi=not args.no_wifi,
+        timeout=args.timeout,
+        workers=args.workers,
+    )
+    out = Path(args.out) if args.out else survey.DEFAULT_OUT
+    report = Path(args.report) if args.report else survey.DEFAULT_REPORT
+    survey.save(result, out, report)
+    if args.json:
+        print(json.dumps(result, ensure_ascii=False, indent=2))
+    else:
+        survey.print_summary(result)
+    print(f"\nSaved JSON to {out}\nSaved local report to {report}", flush=True)
+    return 0
+
+
 def cmd_agent(args: argparse.Namespace) -> int:
     goal = " ".join(args.goal).strip() or "列出设备"
     inventory = agent_module.load_inventory(refresh=args.refresh, sweep=args.sweep)
@@ -86,7 +123,7 @@ def cmd_sim(args: argparse.Namespace) -> int:
         print(f"{step['n']}. {step['title']}：{step['detail']}")
     print(f"\n结果：{result['summary']}")
     print(
-        f"事件：{runtime.events.count()} 条 "
+        f"事件：{runtime.status().get('runtime', {}).get('events', 0)} 条 "
         f"(northbound intent → southbound command → northbound state)"
     )
     return 0 if result["ok"] else 1
@@ -101,7 +138,10 @@ def cmd_demo(args: argparse.Namespace) -> int:
     return 0
 
 
-def cmd_mcp(_args: argparse.Namespace) -> int:
+def cmd_mcp(args: argparse.Namespace) -> int:
+    remote = getattr(args, "remote", "") or os.environ.get("SOUTHBOUND_REMOTE_URL")
+    if remote:
+        mcp_server.configure(remote)
     mcp_server.main()
     return 0
 
@@ -182,6 +222,14 @@ def cmd_onboard(args: argparse.Namespace) -> int:
         value = getattr(args, field)
         if value:
             request[field] = value
+    if args.connection:
+        try:
+            request["connection"] = json.loads(args.connection)
+            if not isinstance(request["connection"], dict):
+                raise ValueError("connection must be an object")
+        except ValueError as exc:
+            print(f"invalid --connection JSON: {exc}", file=sys.stderr)
+            return 2
     if args.state:
         try:
             request["state"] = json.loads(args.state)
@@ -235,10 +283,12 @@ def cmd_decommission(args: argparse.Namespace) -> int:
 def cmd_info(_args: argparse.Namespace) -> int:
     print("Southbound 工具链\n")
     print("  discover  ARP / SSDP / mDNS 发现与分级")
+    print("  survey    无主机频段/网络 survey 与接入就绪度")
     print("  scan      端口扫描与服务指纹")
     print("  agent     基于 inventory 的目标问答")
     print("  intent    northbound 目标 → southbound 动作")
     print("  serve     启动 Southbound runtime + 可视化面板")
+    print("  mcp       stdio MCP server；可用 --remote 连接共享 runtime")
     print("  sim       intent 的兼容别名")
     print("  tools     接入工具层的能力目录")
     print("  call      通过策略与审计层执行设备能力")
@@ -276,6 +326,25 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--out", default="")
     p.set_defaults(func=cmd_scan)
 
+    p = sub.add_parser(
+        "survey", help="hostless local network survey and harness readiness"
+    )
+    p.add_argument("--sweep", action="store_true", help="opt-in ICMP sweep")
+    p.add_argument("--no-mdns", action="store_true")
+    p.add_argument("--no-ssdp", action="store_true")
+    p.add_argument(
+        "--no-ports", action="store_true", help="skip service fingerprinting"
+    )
+    p.add_argument("--ble", action="store_true", help="optional BLE advertisement scan")
+    p.add_argument("--ble-seconds", type=float, default=5.0)
+    p.add_argument("--no-wifi", action="store_true")
+    p.add_argument("--timeout", type=float, default=0.4)
+    p.add_argument("--workers", type=int, default=192)
+    p.add_argument("--out", default="")
+    p.add_argument("--report", default="")
+    p.add_argument("--json", action="store_true")
+    p.set_defaults(func=cmd_survey)
+
     p = sub.add_parser("agent", help="answer a goal from the LAN inventory")
     p.add_argument("goal", nargs="*")
     p.add_argument("--refresh", action="store_true")
@@ -305,6 +374,11 @@ def build_parser() -> argparse.ArgumentParser:
     p.set_defaults(func=cmd_demo)
 
     p = sub.add_parser("mcp", help="run the stdio MCP server")
+    p.add_argument(
+        "--remote",
+        default="",
+        help="use a shared runtime service, e.g. http://127.0.0.1:8765",
+    )
     p.set_defaults(func=cmd_mcp)
 
     p = sub.add_parser("tools", help="list access-layer capability tools")
@@ -326,7 +400,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p.add_argument(
         "--adapter",
-        choices=["sim", "home_assistant", "mqtt", "zigbee2mqtt"],
+        choices=REGISTRY.names(),
         default="sim",
     )
     p.add_argument("--id", dest="device_id", default="")
@@ -334,16 +408,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument(
         "--kind",
         default="sensor",
-        choices=[
-            "light",
-            "plug",
-            "cover",
-            "sensor",
-            "binary_sensor",
-            "purifier",
-            "thermostat",
-            "lock",
-        ],
+        choices=list(CAPABILITIES),
     )
     p.add_argument("--room", default="")
     p.add_argument("--protocol", default="Virtual")
@@ -354,6 +419,9 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--command-topic", default="")
     p.add_argument("--state-topic", default="")
     p.add_argument("--state", default="", help="JSON state for sim devices")
+    p.add_argument(
+        "--connection", default="", help="JSON connection fields for BLE/NFC"
+    )
     p.add_argument("--safe-to-automate", action="store_true")
     p.add_argument("--confirm", action="store_true")
     p.set_defaults(func=cmd_onboard)
@@ -371,7 +439,11 @@ def build_parser() -> argparse.ArgumentParser:
 def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv if argv is not None else sys.argv[1:])
-    return args.func(args)
+    try:
+        return args.func(args)
+    finally:
+        while _RUNTIMES:
+            _RUNTIMES.pop().close()
 
 
 if __name__ == "__main__":

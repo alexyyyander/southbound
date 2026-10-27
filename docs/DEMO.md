@@ -149,7 +149,7 @@ claude mcp add --scope project southbound -- python3 -m southbound.mcp_server
 
 **没有设备数据？** 先运行 `python3 -m southbound discover --sweep`；面板缺失 `inventory.json` 时仍可运行模拟器部分。
 
-**接入后 CLI 看不到设备？** CLI 和已运行的 dashboard 是两个进程；CLI 会写 `data/commissioned.json`，dashboard 刷新/重启后恢复。独立 runtime service 是后续工作。
+**接入后 CLI 看不到设备？** CLI 和已运行的 dashboard 默认是两个进程。启动 `southbound serve` 作为共享 runtime，并用 `SOUTHBOUND_REMOTE_URL` 连接 CLI/MCP，才能共享同一个设备图；否则 CLI 会写 `data/commissioned.json`，dashboard 刷新/重启后恢复。
 
 **接入失败？** 检查 adapter 是否可用、是否传了 `confirm=true`、HA 是否设置了 `HA_TOKEN`、MQTT 是否安装了 `paho-mqtt`。
 

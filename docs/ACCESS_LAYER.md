@@ -140,7 +140,7 @@ Agent 先读 catalog 或 `iot_devices_list`，再用 `iot_call` 执行。
 - **SSE**：`GET /api/events` 实时推送；`GET /api/events/recent?since=<id>` 支持重放。
 - **Dashboard**：顶部 flowbar 按 `plane` 在 Agent—Southbound 与 Southbound—Devices 两段上打点，显示最新事件和计数。
 
-运行时是进程内的：Dashboard、CLI、MCP 各自嵌入一个。需要多客户端共享状态时，可把同一组 HTTP 端点独立成 service，adapter 和策略代码不变。
+运行时默认进程内；`southbound serve` 可作为共享 runtime service，Dashboard 使用它，MCP/CLI 可通过 `SOUTHBOUND_REMOTE_URL` 连接同一个设备图。见 [共享 Runtime Service](RUNTIME_SERVICE.md)。
 
 ### 受控 onboarding
 
@@ -197,6 +197,8 @@ Agent 先读 catalog 或 `iot_devices_list`，再用 `iot_call` 执行。
 | `home_assistant` | 完整实现（REST） | Matter / Zigbee / ESPHome / 厂商设备先接入 HA，再由本层调用 |
 | `zigbee2mqtt` | 已实现，需 `paho-mqtt` | Zigbee 设备经 Zigbee2MQTT |
 | `mqtt` | 已实现，需 `paho-mqtt` | ESPHome/Tasmota/自定义 MQTT 设备 |
+| `ble` | 已实现，需 `bleak`；待硬件验收 | GATT 读写、通知、显式模拟模式 |
+| `nfc` | 已实现，需 `nfcpy`；待硬件验收 | 标签 UID/NDEF、刷卡事件、显式模拟模式 |
 | ESPHome 原生 API | 未实现 | 推荐走 HA 或 MQTT |
 | Matter 原生 controller | 未实现 | 推荐走 HA 的 Matter 集成 |
 
@@ -307,9 +309,10 @@ python3 -m southbound call ha:lock.front_door unlock --confirm
 1. 继承 `DeviceAdapter`，实现 `bindings()` 和 `call()`。
 2. `bindings()` 用 `capabilities_for(kind, allowed)` 生成能力列表。
 3. `call()` 只做协议执行，策略和审计不要重复实现。
-4. 在 `config.py` 中读取配置并注册 adapter。
+4. 在 `access/registry.py` 的 `REGISTRY` 注册 `AdapterSpec`（工厂、类型与接入字段），配置、CLI、MCP 和表单共享注册信息。
 5. 在 `config/access.example.json` 增加一段示例。
-6. 加测试：至少覆盖 bindings、参数校验、成功调用、失败路径。
+6. 有主动上报时通过 `emit(device_id, event_type, data)` 发送设备事件，实现 `close()` 释放后台连接。
+7. 加测试：至少覆盖 bindings、参数校验、成功调用、失败路径与资源释放。
 
 示例骨架：
 
@@ -360,7 +363,7 @@ class MyAdapter(DeviceAdapter):
 - 能力目录与 JSON Schema 参数校验；
 - 策略引擎与高风险硬门；
 - 审计日志；
-- 模拟器、Home Assistant、MQTT、Zigbee2MQTT 四类 adapter；
+- 模拟器、Home Assistant、MQTT、Zigbee2MQTT、BLE、NFC 六类 adapter；后两者已完成模拟与库边界测试，待真实硬件验收，见 [硬件适配器](HARDWARE_ADAPTERS.md)；
 - MCP、CLI、HTTP 三种入口；
 - SouthboundRuntime、EventBus、SSE 事件流与面板 flowbar；
 - 受控 onboarding/commissioning、持久化与撤销；
@@ -372,13 +375,12 @@ class MyAdapter(DeviceAdapter):
 - Matter 原生 controller（目前经 HA）；
 - ESPHome 原生 protobuf API（目前经 HA/MQTT）；
 - 设备侧事件订阅（MQTT 已缓存 state，但尚未做完整事件流）；
-- 运行时独立 service / 多客户端共享状态；
+- 共享 runtime 的认证/TLS 与多用户权限（`southbound serve` 已可共享设备图）；
 - commissioning 的隔离区/审批 UI 与从扫描结果一键预填；
 - 设备自动发现到 adapter 配置的自动生成；
-- 多用户认证、远端 TLS、权限模型；
 - 真实硬件上的延迟与可靠性数据。
 
-结论：作为 **IoT 全智能 agent 的接入工具层骨架**，它是完整的；作为**生产级控制系统**，还缺设备侧事件流、运行时服务和现场验证。
+结论：作为 **IoT 全智能 agent 的接入工具层骨架**，它是完整的；作为**生产级控制系统**，还缺设备侧事件流、远程认证和现场验证；共享 runtime service 已具备本地模式。
 
 ## 11. 下一步
 

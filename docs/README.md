@@ -1,8 +1,13 @@
 # 文档索引
 
+- [架构拆解图](ARCHITECTURE_BREAKDOWN.md) — Agent harness、MCP、Southbound core、adapters、物理设备与部署 profile
+- [共享 Runtime Service](RUNTIME_SERVICE.md) — 一个设备图供 Dashboard / MCP / CLI 共用，远程调用与安全边界
+- [BLE / NFC 与设备事件](HARDWARE_ADAPTERS.md) — 统一适配器注册、真实驱动、模拟演示与验证边界
+
 - [About Southbound](ABOUT.md) — 项目定位、命名由来、设计原则与边界
 - [演示](DEMO.md) — 面板、2.5D 房间、CLI、MCP、受控接入与故障排查
 - [2.5D 场景与 3DGS](SCENE.md) — 当前控制图、坐标映射与高斯泼溅视觉层规划
+- [Survey 与 Harness 部署](HARNESS.md) — 无主机 survey、Pi 最小 harness、硬件与验收
 - [协议与 API](PROTOCOL.md) — northbound/southbound 契约、HTTP、SSE 事件与数据模型
 - [技术架构与可行性](ARCHITECTURE.md) — 组件、数据契约、部署形态、可行性矩阵与路线图
 - [接入工具层](ACCESS_LAYER.md) — 设备/能力模型、策略、审计、适配器、MCP/CLI/HTTP 接口

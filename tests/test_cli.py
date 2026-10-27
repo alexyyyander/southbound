@@ -28,6 +28,18 @@ class CliParserTest(unittest.TestCase):
         args = build_parser().parse_args(["access"])
         self.assertEqual(args.command, "access")
 
+    def test_survey_command(self) -> None:
+        args = build_parser().parse_args(["survey", "--no-ports", "--ble", "--no-wifi"])
+        self.assertEqual(args.command, "survey")
+        self.assertTrue(args.no_ports)
+        self.assertTrue(args.ble)
+        self.assertTrue(args.no_wifi)
+
+    def test_mcp_remote_command(self) -> None:
+        args = build_parser().parse_args(["mcp", "--remote", "http://127.0.0.1:8765"])
+        self.assertEqual(args.command, "mcp")
+        self.assertEqual(args.remote, "http://127.0.0.1:8765")
+
 
 if __name__ == "__main__":
     unittest.main()

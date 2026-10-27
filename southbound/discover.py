@@ -18,6 +18,7 @@ from __future__ import annotations
 import argparse
 import ipaddress
 import json
+import platform
 import re
 import socket
 import subprocess
@@ -48,6 +49,8 @@ MDNS_TYPES = [
     "_raop._tcp",
     "_hap._tcp",
     "_matter._tcp",
+    "_matterc._udp",
+    "_meshcop._udp",
     "_googlecast._tcp",
     "_ipp._tcp",
     "_printer._tcp",
@@ -88,7 +91,79 @@ def run_cmd(cmd: list[str], timeout: float) -> subprocess.CompletedProcess:
         return subprocess.CompletedProcess(cmd, 127, "", "")
 
 
+def _linux_host_info() -> dict:
+    """Best-effort Linux/Pi host metadata without macOS-only tools."""
+    route = run_cmd(["ip", "route", "show", "default"], 3).stdout
+    match = re.search(r"default\s+via\s+(\S+)\s+dev\s+(\S+)", route)
+    gateway = match.group(1) if match else ""
+    iface = match.group(2) if match else "eth0"
+    local_ip = ""
+    prefix = ""
+    addr = run_cmd(["ip", "-o", "-4", "addr", "show", "dev", iface], 3).stdout
+    addr_match = re.search(r"inet\s+(\d+\.\d+\.\d+\.\d+)/(\d+)", addr)
+    if addr_match:
+        local_ip = addr_match.group(1)
+        prefix = addr_match.group(2)
+    if not local_ip:
+        try:
+            local_ip = socket.gethostbyname(socket.gethostname())
+        except OSError:
+            local_ip = ""
+    cidr = ""
+    netmask = ""
+    if local_ip and prefix:
+        try:
+            network = ipaddress.ip_network(f"{local_ip}/{prefix}", strict=False)
+            cidr = str(network)
+            netmask = str(network.netmask)
+        except ValueError:
+            cidr = ""
+    cpu = ""
+    try:
+        for line in Path("/proc/cpuinfo").read_text(encoding="utf-8").splitlines():
+            if line.lower().startswith("model name"):
+                cpu = line.split(":", 1)[1].strip()
+                break
+    except OSError:
+        cpu = ""
+    cpu = cpu or platform.processor() or "unknown"
+    model = ""
+    try:
+        model = (
+            Path("/sys/firmware/devicetree/base/model")
+            .read_bytes()
+            .replace(b"\x00", b" ")
+            .decode("utf-8", "ignore")
+            .strip()
+        )
+    except OSError:
+        pass
+    mac = ""
+    try:
+        mac = (
+            Path(f"/sys/class/net/{iface}/address").read_text(encoding="utf-8").strip()
+        )
+    except OSError:
+        pass
+    hostname = socket.gethostname()
+    return {
+        "interface": iface,
+        "local_ip": local_ip,
+        "gateway": gateway,
+        "prefix": local_ip.rsplit(".", 1)[0] + "." if local_ip.count(".") == 3 else "",
+        "netmask": netmask,
+        "cidr": cidr,
+        "subnet": cidr,
+        "hostname": hostname,
+        "cpu": cpu,
+        "model": model,
+        "mac": mac.lower() or None,
+    }
+
+
 def host_info() -> dict:
+    if platform.system() == "Linux":
+        return _linux_host_info()
     route = run_cmd(["route", "-n", "get", "default"], 3).stdout
     iface_match = re.search(r"interface:\s*(\S+)", route)
     gateway_match = re.search(r"gateway:\s*(\S+)", route)
@@ -140,7 +215,29 @@ def host_info() -> dict:
     }
 
 
+def _parse_proc_arp(text: str) -> dict[str, str]:
+    entries: dict[str, str] = {}
+    for line in text.splitlines()[1:]:
+        fields = line.split()
+        if len(fields) < 4:
+            continue
+        ip, mac = fields[0], fields[3].lower()
+        if ip.count(".") != 3 or mac in ("00:00:00:00:00:00", "incomplete"):
+            continue
+        if mac.startswith(("1:0:5e", "01:00:5e", "33:33", "01:80:c2")):
+            continue
+        entries[ip] = mac
+    return entries
+
+
 def parse_arp() -> dict[str, str]:
+    if platform.system() == "Linux":
+        try:
+            arp = _parse_proc_arp(Path("/proc/net/arp").read_text(encoding="utf-8"))
+            if arp:
+                return arp
+        except OSError:
+            pass
     entries: dict[str, str] = {}
     out = run_cmd(["arp", "-a"], 5).stdout
     for line in out.splitlines():
@@ -171,8 +268,9 @@ def ping_sweep(cidr: str, skip_ip: str = "", workers: int = 48) -> None:
         targets = [f"{base}.{i}" for i in range(1, 255) if f"{base}.{i}" != skip_ip]
 
     def ping(ip: str) -> None:
+        wait = "1" if platform.system() == "Linux" else "400"
         subprocess.run(
-            ["ping", "-c", "1", "-W", "400", "-q", ip],
+            ["ping", "-c", "1", "-W", wait, "-q", ip],
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
         )
@@ -253,6 +351,46 @@ def ssdp_discover(duration: float = 3.0) -> list[dict]:
     return list(seen.values())
 
 
+def _avahi_discover(duration: float) -> list[dict]:
+    """Linux fallback using avahi-browse, when avahi-utils is installed."""
+    try:
+        proc = subprocess.run(
+            ["avahi-browse", "-art"],
+            capture_output=True,
+            text=True,
+            timeout=duration,
+        )
+        out = _text(proc.stdout) + _text(proc.stderr)
+    except (subprocess.TimeoutExpired, FileNotFoundError):
+        return []
+    found: list[dict] = []
+    for line in out.splitlines():
+        if not line.startswith("="):
+            continue
+        fields = line[1:].split(";")
+        if len(fields) < 8:
+            continue
+        name = fields[2].replace("\\032", " ").replace("\\\\", "\\")
+        service = fields[3].rstrip(".")
+        host = fields[5].rstrip(".")
+        address = fields[6]
+        try:
+            port = int(fields[7])
+        except ValueError:
+            port = None
+        found.append(
+            {
+                "service_type": service,
+                "instance": name,
+                "display_name": name,
+                "hostname": host or None,
+                "ip": address if address.count(".") == 3 else None,
+                "port": port,
+            }
+        )
+    return found
+
+
 def _browse_mdns(service_type: str, duration: float) -> list[dict]:
     try:
         proc = subprocess.run(
@@ -317,6 +455,8 @@ def _resolve_mdns(services: list[dict], duration: float = 3.0) -> list[dict]:
 
 
 def mdns_discover(duration: float = 3.5) -> list[dict]:
+    if platform.system() == "Linux":
+        return _avahi_discover(duration)
     with ThreadPoolExecutor(max_workers=len(MDNS_TYPES)) as pool:
         batches = list(pool.map(lambda svc: _browse_mdns(svc, duration), MDNS_TYPES))
     deduped: dict[tuple[str, str], dict] = {}

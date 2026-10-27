@@ -49,7 +49,7 @@
   <rect x="20" y="20" width="1660" height="8" fill="#CF4A29"/>
 
   <!-- header -->
-  <text x="54" y="60" class="kicker">SOUTHBOUND / SYSTEM ANATOMY · v0.9.0 · LOCAL FIRST</text>
+  <text x="54" y="60" class="kicker">SOUTHBOUND / SYSTEM ANATOMY · v0.10.0 · LOCAL FIRST</text>
   <text x="54" y="103" class="title">架构拆解 / Architecture Breakdown</text>
   <text x="54" y="130" class="subtitle">The harness plans. Southbound owns the control plane. Every device action crosses policy, audit, and read-back.</text>
   <text x="1646" y="60" text-anchor="end" class="mono-small">NORTHBOUND → TOOLS</text>

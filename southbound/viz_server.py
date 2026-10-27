@@ -54,7 +54,7 @@ def _load_json(name: str) -> dict:
 
 
 class Handler(BaseHTTPRequestHandler):
-    server_version = "SouthboundDemo/0.8"
+    server_version = "SouthboundDemo/0.10"
 
     def log_message(self, fmt: str, *args) -> None:  # keep stdout clean
         print(f"[viz] {self.address_string()} {fmt % args}", flush=True)
@@ -90,11 +90,27 @@ class Handler(BaseHTTPRequestHandler):
             self._json(RUNTIME.status())
             return
         if path in ("/api/access/devices", "/api/northbound/devices"):
-            self._json({"devices": RUNTIME.devices()})
+            query = parse_qs(parsed.query)
+            include = bool(
+                query.get("include_address", ["0"])[0] not in ("", "0", "false")
+            )
+            self._json({"devices": RUNTIME.devices(include_address=include)})
             return
         if path in ("/api/access/catalog", "/api/northbound/catalog"):
             self._json({"tools": RUNTIME.catalog()})
             return
+        for prefix in ("/api/access/devices/", "/api/northbound/devices/"):
+            if path.startswith(prefix):
+                query = parse_qs(parsed.query)
+                include = bool(
+                    query.get("include_address", ["0"])[0] not in ("", "0", "false")
+                )
+                device_id = unquote(path[len(prefix) :]).strip("/")
+                try:
+                    self._json(RUNTIME.describe(device_id, include_address=include))
+                except AccessError as exc:
+                    self._json({"error": str(exc)}, status=404)
+                return
         if path == "/api/access/audit":
             self._json({"entries": HUB.audit.recent(50)})
             return
@@ -317,6 +333,7 @@ def serve(
         print("\nstopped", flush=True)
     finally:
         server.server_close()
+        RUNTIME.close()
 
 
 def main() -> None:

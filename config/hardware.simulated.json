@@ -1,0 +1,35 @@
+{
+  "policy": {"mode": "supervised", "allow_high_risk": true},
+  "adapters": {
+    "sim": {"enabled": true},
+    "ble": {
+      "enabled": true,
+      "driver": "simulated",
+      "devices": [{
+        "device_id": "ble:demo",
+        "name": "模拟 BLE 端点",
+        "kind": "ble_device",
+        "room": "实验室",
+        "connection": {
+          "address": "simulated-peripheral",
+          "read_char": "0000fff1-0000-1000-8000-00805f9b34fb",
+          "write_char": "0000fff1-0000-1000-8000-00805f9b34fb",
+          "notify_char": "0000fff1-0000-1000-8000-00805f9b34fb"
+        },
+        "capabilities": ["read", "write", "subscribe", "unsubscribe"]
+      }]
+    },
+    "nfc": {
+      "enabled": true,
+      "driver": "simulated",
+      "devices": [{
+        "device_id": "nfc:demo",
+        "name": "模拟 NFC 读卡器",
+        "kind": "nfc_reader",
+        "room": "实验室",
+        "connection": {"path": "simulated-reader"},
+        "capabilities": ["read", "write_text", "subscribe", "unsubscribe"]
+      }]
+    }
+  }
+}

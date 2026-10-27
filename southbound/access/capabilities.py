@@ -38,6 +38,23 @@ _MODE = {
 }
 
 CAPABILITIES: dict[str, dict[str, Capability]] = {
+    "ble_device": {
+        "read": Capability("read", "读取已绑定的 BLE GATT 特征（十六进制）", Risk.READ),
+        "subscribe": Capability("subscribe", "订阅已绑定的 BLE GATT 通知", Risk.READ),
+        "unsubscribe": Capability("unsubscribe", "停止 BLE 通知订阅", Risk.READ),
+        "write": Capability("write", "写入已绑定的 BLE GATT 特征", Risk.HIGH,
+                            parameters={"hex": {"type": "string", "maxLength": 1024}},
+                            required=("hex",)),
+    },
+    "nfc_reader": {
+        "read": Capability("read", "读取 NFC 标签 UID 和 NDEF", Risk.READ),
+        "subscribe": Capability("subscribe", "监听 NFC 刷卡事件", Risk.READ),
+        "unsubscribe": Capability("unsubscribe", "停止 NFC 刷卡监听", Risk.READ),
+        "write_text": Capability("write_text", "向指定 UID 的标签写入 NDEF 文本", Risk.HIGH,
+                                 parameters={"text": {"type": "string", "maxLength": 1024},
+                                             "expected_uid": {"type": "string", "maxLength": 64}},
+                                 required=("text", "expected_uid")),
+    },
     "light": {
         "turn_on": Capability("turn_on", "打开灯", Risk.LOW),
         "turn_off": Capability("turn_off", "关闭灯", Risk.LOW),
@@ -175,6 +192,8 @@ def validate_arguments(
             raise ValidationError(f"参数 {key} 不能大于 {spec['maximum']}")
         if "enum" in spec and value not in spec["enum"]:
             raise ValidationError(f"参数 {key} 必须是 {spec['enum']} 之一")
+        if "maxLength" in spec and len(value) > spec["maxLength"]:
+            raise ValidationError(f"参数 {key} 过长")
 
     return dict(arguments)
 
