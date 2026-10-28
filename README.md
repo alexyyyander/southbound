@@ -29,7 +29,7 @@
 
 `Southbound` 取 IoT/电信架构里的 *southbound interface*：北向接口面向应用与 agent，南向接口面向设备。这个项目就是 agent 与设备之间的那一层。
 
-![Southbound 控制台与受控接入表单](docs/dashboard.jpg)
+[![Southbound architecture breakdown](docs/ARCHITECTURE_BREAKDOWN.png)](docs/ARCHITECTURE_BREAKDOWN.md)
 
 ## 为什么是 Southbound
 
@@ -94,8 +94,6 @@ python3 -m southbound serve
 ![Southbound 2.5D room](docs/scene.jpg)
 
 在 `/scene` 顶部把 **视图 2.5D** 切到 **SPLAT**：这是从同一套房间几何采样的合成高斯泼溅风格预览，可拖动旋转、滚轮缩放；设备热点、avatar 和控制仍走同一套 presence/策略/审计路径。它是视觉原型，不是训练出来的 3DGS 资产。
-
-![Southbound synthetic splat preview](docs/splat.jpg)
 
 也可以直接命令行：
 
@@ -444,6 +442,7 @@ CI 在 Python 3.10–3.13 上跑 ruff、单元测试和 wheel/sdist 构建。
 - SouthboundRuntime + EventBus + SSE + 面板 flowbar；
 - 共享 runtime service：Dashboard / MCP / CLI 可共用一个设备图和审计；
 - 远程 runtime client：`SOUTHBOUND_REMOTE_URL` / `southbound mcp --remote`；
+- 远程 runtime token 认证：loopback 免 token，非 loopback 需要 Bearer token；
 - 受控 onboarding / commissioning / 持久化 / 撤销；
 - 2.5D 房间实验：presence 信号、低风险自动反射、Agent notice、回读验证；
 - WebGL 合成 splat 预览：轨道相机、设备热点、avatar 投影；
@@ -453,11 +452,11 @@ CI 在 Python 3.10–3.13 上跑 ruff、单元测试和 wheel/sdist 构建。
 
 **下一步**
 
-- 远程 runtime 的认证/TLS 与多用户权限（当前仍只建议 loopback）；
+- 远程 runtime 的 TLS 与多用户身份（token 已实现；仍建议 loopback 或可信 LAN）；
 - 隔离区/审批 UI，从扫描结果一键预填 onboarding；
-- 设备侧事件订阅（MQTT/HA）；
+- Home Assistant WebSocket/事件订阅（MQTT/Zigbee2MQTT/BLE/NFC 设备事件已接入；HA REST 仍主要轮询）；
 - Matter 原生 controller、ESPHome 原生 API；
-- 真实 ESP32/Matter/Zigbee 硬件验证；
+- 真实 ESP32/Matter/Zigbee/BLE/NFC 硬件验证；
 - **真实 3DGS 视觉层（可选）**：当前已有合成 splat 预览；真实照片级效果需要采集视频、COLMAP + nerfstudio/gsplat 训练，再把 `.splat` 资产接入同一 WebGL 层。2.5D 地图仍是设备锚点、碰撞、策略与审计的权威层；大文件放 `data/` 或 Git LFS，不提交真实家庭影像。
 
 ## 安全与边界
