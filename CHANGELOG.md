@@ -6,6 +6,71 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.11.0] - 2026-10-27
+
+### Added
+
+- Optional Bearer-token authentication for the shared runtime service.
+  Loopback clients remain exempt; non-loopback API clients need
+  `SOUTHBOUND_REMOTE_TOKEN`; non-loopback binds without a token are refused.
+- `southbound serve --token`, `southbound mcp --token`, and the corresponding
+  environment variables.
+- Tests for the auth helper and token header propagation (89 tests total).
+
+### Changed
+
+- Remote MCP/CLI docs now show token configuration; TLS and multi-user
+  identity remain future work.
+
+## [0.10.0] - 2026-10-27
+
+### Added
+
+- **Shared runtime service**: `southbound serve` is now a single runtime that
+  Dashboard, MCP, and CLI clients can share; `RemoteRuntime` talks to it over
+  the local HTTP API instead of embedding a second device graph.
+- **Remote MCP/CLI mode**: `southbound mcp --remote URL` and
+  `SOUTHBOUND_REMOTE_URL` connect to the shared runtime; device describe and
+  include-address HTTP endpoints are now available.
+- Shared adapter registry for configuration, CLI, MCP, and dashboard onboarding.
+- Optional BLE GATT and NFC reader adapters, with explicit simulated drivers,
+  bound connection fields, policy-gated writes, and lifecycle cleanup.
+- Unified device-originated events for MQTT state, BLE notifications, and NFC
+  tag presentations, delivered through the existing EventBus/SSE surface.
+- Hardware configuration examples, an in-process no-hardware demo, and tests
+  covering simulated flows and fake Bleak/nfcpy boundaries. Real hardware
+  compatibility has not yet been verified.
+- Tests for the remote runtime client and CLI remote mode (85 tests total).
+
+### Changed
+
+- MQTT read calls establish subscriptions, reconnect callbacks restore them,
+  and decommission/close release subscriptions and connections.
+- `SOUTHBOUND_CONFIG` selects an explicit configuration file for all entry points.
+- Runtime docs distinguish embedded mode from the shared service; remote mode
+  is loopback-only until authentication/TLS is added.
+
+## [0.9.0] - 2026-10-27
+
+### Added
+
+- **Hostless `southbound survey`**: IP/mDNS/SSDP inventory, optional BLE
+  advertisements, Wi-Fi band survey, radio/coordinator evidence, and
+  service fingerprinting limited to discovered hosts.
+- **Adapter readiness report**: MQTT, Home Assistant, camera, Zigbee, Thread,
+  Matter, BLE, and drone status with a recommended harness profile.
+- **Raspberry Pi / Linux support** for host discovery, ARP, mDNS (avahi),
+  Wi-Fi (nmcli), Bluetooth and serial radio detection.
+- **Pi harness profile**: `pi_minimal` and `pi_microhub`, plus a systemd unit
+  example under `deploy/systemd/`.
+- Tests for survey parsing, readiness, Pi profile selection, and the CLI
+  (61 tests total).
+
+### Changed
+
+- Version bump to `0.9.0`; survey reports are written under `data/` and stay
+  gitignored.
+
 ## [0.8.0] - 2026-10-26
 
 ### Added

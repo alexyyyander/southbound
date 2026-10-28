@@ -46,11 +46,13 @@ class MqttAdapter(DeviceAdapter):
         self.client_id = client_id
         self.timeout = timeout
         self._client = None
+        self._closed = False
+        self._connection_lock = threading.RLock()
         self._states: dict[str, Any] = {}
         self._lock = threading.Lock()
 
     def available(self) -> bool:
-        return mqtt is not None
+        return mqtt is not None and not self._closed
 
     def _binding_for(
         self, item: dict[str, Any], commissioned: bool = False
@@ -127,12 +129,19 @@ class MqttAdapter(DeviceAdapter):
             raise ValueError("command_topic is required")
 
     def remove_device(self, device_id: str) -> None:
+        topics = {item.get("state_topic") for item in self.devices
+                  if item.get("device_id") == device_id}
         before = len(self.devices)
         self.devices = [
             item for item in self.devices if item.get("device_id") != device_id
         ]
         if len(self.devices) == before:
             raise ValueError(f"device not commissioned: {device_id}")
+        remaining = {item.get("state_topic") for item in self.devices}
+        if self._client:
+            for topic in topics - remaining:
+                if topic:
+                    self._client.unsubscribe(topic)
 
     def call(
         self,
@@ -142,6 +151,7 @@ class MqttAdapter(DeviceAdapter):
     ) -> dict[str, Any]:
         state_topic = binding.address.get("state_topic", "")
         if capability.name == "read":
+            self._ensure_client()
             with self._lock:
                 state = self._states.get(state_topic, "unknown")
             return {"state": state, "topic": state_topic}
@@ -192,6 +202,12 @@ class MqttAdapter(DeviceAdapter):
         raise AdapterUnavailable(f"MQTT 不支持 {binding.kind}.{name}")
 
     def _ensure_client(self) -> Any:
+        with self._connection_lock:
+            if self._closed:
+                raise AdapterUnavailable("MQTT adapter is closed")
+            return self._connect_client()
+
+    def _connect_client(self) -> Any:
         if mqtt is None:
             raise AdapterUnavailable(
                 "paho-mqtt 未安装；运行 pip install 'southbound[mqtt]'"
@@ -208,6 +224,7 @@ class MqttAdapter(DeviceAdapter):
         if self.username:
             client.username_pw_set(self.username, self.password)
         client.on_message = self._on_message
+        client.on_connect = self._on_connect
         try:
             client.connect(self.host, self.port, keepalive=30)
         except OSError as exc:
@@ -224,14 +241,34 @@ class MqttAdapter(DeviceAdapter):
         self._client = client
         return client
 
+    def _on_connect(self, client, _userdata, _flags, _rc, *_extra) -> None:
+        for topic in {item.get("state_topic") for item in self.devices}:
+            if topic:
+                client.subscribe(topic, qos=0)
+
+    def close(self) -> None:
+        with self._connection_lock:
+            self._closed = True
+            client, self._client = self._client, None
+            if client is not None:
+                try:
+                    client.disconnect()
+                finally:
+                    client.loop_stop()
+
     def _on_message(self, _client, _userdata, message) -> None:
         raw = message.payload.decode("utf-8", "ignore")
+        def reject_constant(value):
+            raise ValueError(f"non-JSON number: {value}")
         try:
-            value = json.loads(raw)
-        except json.JSONDecodeError:
+            value = json.loads(raw, parse_constant=reject_constant)
+        except ValueError:
             value = raw
         with self._lock:
             self._states[message.topic] = value
+        for item in list(self.devices):
+            if item.get("state_topic") == message.topic and item.get("device_id"):
+                self.emit(item["device_id"], "state", {"state": value, "topic": message.topic})
 
 
 class Zigbee2MqttAdapter(MqttAdapter):
@@ -245,6 +282,7 @@ class Zigbee2MqttAdapter(MqttAdapter):
         password: str | None = None,
         devices: list[dict[str, Any]] | None = None,
         timeout: float = 4.0,
+        client_id: str = "southbound-z2m",
     ) -> None:
         normalized: list[dict[str, Any]] = []
         for item in devices or []:
@@ -268,7 +306,7 @@ class Zigbee2MqttAdapter(MqttAdapter):
             username=username,
             password=password,
             devices=normalized,
-            client_id="southbound-z2m",
+            client_id=client_id,
             timeout=timeout,
         )
 

@@ -9,13 +9,25 @@ adapters should only perform the protocol call.
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import Any
+from typing import Any, Callable
 
 from ..models import Capability, DeviceBinding
 
 
 class DeviceAdapter(ABC):
     name: str = "adapter"
+
+    def set_event_sink(self, sink: Callable[[str, str, dict], None] | None) -> None:
+        """Attach a hub-owned sink. Drivers supply data, never event provenance."""
+        self._event_sink = sink
+
+    def emit(self, device_id: str, event_type: str, data: dict) -> None:
+        sink = getattr(self, "_event_sink", None)
+        if sink is not None:
+            sink(device_id, event_type, data)
+
+    def close(self) -> None:
+        """Release connections and stop background workers; safe to call twice."""
 
     def available(self) -> bool:
         return True

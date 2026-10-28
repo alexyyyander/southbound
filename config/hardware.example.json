@@ -1,0 +1,31 @@
+{
+  "policy": {"mode": "supervised", "allow_high_risk": false},
+  "adapters": {
+    "sim": {"enabled": true},
+    "ble": {
+      "enabled": false,
+      "driver": "bleak",
+      "timeout": 10,
+      "devices": [{
+        "device_id": "ble:battery",
+        "kind": "ble_device",
+        "connection": {
+          "address": "REPLACE_WITH_DEVICE_ADDRESS_OR_MACOS_UUID",
+          "read_char": "00002a19-0000-1000-8000-00805f9b34fb"
+        },
+        "capabilities": ["read"]
+      }]
+    },
+    "nfc": {
+      "enabled": false,
+      "driver": "nfcpy",
+      "timeout": 5,
+      "devices": [{
+        "device_id": "nfc:reader",
+        "kind": "nfc_reader",
+        "connection": {"path": "usb"},
+        "capabilities": ["read", "subscribe", "unsubscribe"]
+      }]
+    }
+  }
+}

@@ -121,6 +121,16 @@ class SouthboundRuntime:
         self.store = store
         self._agent_runtime = _AgentRuntime(self)
         self._restore_commissioned()
+        self.hub.set_event_sink(self.events.publish)
+
+    def close(self) -> None:
+        self.hub.close()
+
+    def __enter__(self) -> "SouthboundRuntime":
+        return self
+
+    def __exit__(self, *_args) -> None:
+        self.close()
 
     def _restore_commissioned(self) -> None:
         if self.store is None:

@@ -1,0 +1,20 @@
+[Unit]
+Description=Southbound local runtime
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=pi
+WorkingDirectory=/home/pi/southbound
+ExecStart=/home/pi/southbound/.venv/bin/southbound serve --port 8765
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=/home/pi/southbound/data
+
+[Install]
+WantedBy=multi-user.target

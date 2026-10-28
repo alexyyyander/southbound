@@ -7,7 +7,7 @@
 <p align="center"><strong>本地优先的 IoT Agent 南向接入层</strong></p>
 
 <p align="center">
-  <img alt="version 0.8.0" src="https://img.shields.io/badge/version-0.8.0-0F7D78?style=flat-square">
+  <img alt="version 0.11.0" src="https://img.shields.io/badge/version-0.11.0-0F7D78?style=flat-square">
   <img alt="Python 3.10+" src="https://img.shields.io/badge/python-3.10%2B-12262F?style=flat-square">
   <img alt="MIT" src="https://img.shields.io/badge/license-MIT-CF4A29?style=flat-square">
   <img alt="Alpha" src="https://img.shields.io/badge/status-alpha-70848B?style=flat-square">
@@ -29,7 +29,7 @@
 
 `Southbound` 取 IoT/电信架构里的 *southbound interface*：北向接口面向应用与 agent，南向接口面向设备。这个项目就是 agent 与设备之间的那一层。
 
-![Southbound 控制台与受控接入表单](docs/dashboard.jpg)
+[![Southbound architecture breakdown](docs/ARCHITECTURE_BREAKDOWN.png)](docs/ARCHITECTURE_BREAKDOWN.md)
 
 ## 为什么是 Southbound
 
@@ -53,17 +53,21 @@
 | 能力 | 说明 |
 |---|---|
 | **局域网发现** | ARP + mDNS + SSDP，支持 `/23` 等非 `/24` 网段，mDNS 实例解析到 IP |
+| **Survey harness** | `southbound survey`：IP/Wi-Fi/BLE/radio 证据、服务指纹、adapter readiness；支持 macOS 与 Raspberry Pi OS |
 | **T0–T3 分级** | 厂商 OUI、服务类型、端口指纹，判断设备能跑什么级别的 agent |
 | **接入工具层** | DeviceBinding / Capability / Risk / Tool Catalog / JSON Schema 参数校验 |
 | **策略与审计** | read_only / supervised / autonomous；每次调用写 JSONL 审计 |
 | **受控 onboarding** | 发现 → 授权 → 绑定 adapter/策略 → 工具目录；支持撤销与持久化 |
-| **多协议 adapter** | Simulator、Home Assistant REST、MQTT、Zigbee2MQTT |
-| **运行时与事件流** | SouthboundRuntime + EventBus + SSE；面板实时显示 northbound/southbound |
+| **多协议 adapter** | Simulator、Home Assistant REST、MQTT、Zigbee2MQTT、BLE GATT、NFC；BLE/NFC 已通过模拟与驱动替身测试，待硬件验收 |
+| **运行时与事件流** | SouthboundRuntime + EventBus + SSE；`serve` 可作为共享 runtime，MCP/CLI 通过 `SOUTHBOUND_REMOTE_URL` 连接 |
+| **共享 runtime** | 一个设备图、策略和审计供 Dashboard / MCP / CLI 共用；支持 `southbound mcp --remote` 与 Bearer token |
 | **2.5D 房间实验** | `GET /scene`：可移动 avatar、presence 信号、点击设备、自动反射与回读验证 |
 | **Splat 预览** | `/scene` 内切换 WebGL 合成 splat：轨道旋转、设备热点、avatar 投影；同一控制层 |
 | **可视化** | 网络拓扑、设备清单、模拟端点、Agent 控制台、接入表单 |
 | **MCP** | 15 个工具：发现、深扫、模拟器、接入层、受控 onboarding |
 | **无硬件闭环** | 六个虚拟端点 + 确定性 agent trace，没有设备也能跑 |
+
+BLE / NFC 的配置、事件入口与无硬件演示见 [硬件适配器说明](docs/HARDWARE_ADAPTERS.md)。
 
 ## 60 秒 Demo
 
@@ -90,8 +94,6 @@ python3 -m southbound serve
 ![Southbound 2.5D room](docs/scene.jpg)
 
 在 `/scene` 顶部把 **视图 2.5D** 切到 **SPLAT**：这是从同一套房间几何采样的合成高斯泼溅风格预览，可拖动旋转、滚轮缩放；设备热点、avatar 和控制仍走同一套 presence/策略/审计路径。它是视觉原型，不是训练出来的 3DGS 资产。
-
-![Southbound synthetic splat preview](docs/splat.jpg)
 
 也可以直接命令行：
 
@@ -127,6 +129,14 @@ python3 -m pip install -e ".[mqtt]"
 ```
 
 完整演示（面板、CLI、MCP、故障排查）见 [docs/DEMO.md](docs/DEMO.md)。
+
+第一次到目标住宅做接入评估时，先跑无主机 survey：
+
+```bash
+southbound survey --out data/survey.json --report data/SURVEY.local.md
+```
+
+报告会给出 Wi-Fi/BLE/radio 证据、已发现设备和 adapter readiness；真实局域网数据只写入本地 `data/`，不进入仓库。Pi 最小 harness、硬件清单和验收步骤见 [docs/HARNESS.md](docs/HARNESS.md)。
 
 ## 架构
 
@@ -241,6 +251,8 @@ Southbound 的“扩散”是 **受控接入**，不是把 agent 代码复制到
 | `home_assistant` | 完整 REST 实现 | Matter / Zigbee / ESPHome / 厂商设备先接入 HA |
 | `zigbee2mqtt` | 已实现，需 `paho-mqtt` | Zigbee 设备经 Zigbee2MQTT |
 | `mqtt` | 已实现，需 `paho-mqtt` | ESPHome / Tasmota / 自定义 MQTT 设备 |
+| `ble` | 已实现，需 `bleak`；待硬件验收 | GATT 读写、通知、显式模拟模式 |
+| `nfc` | 已实现，需 `nfcpy`；待硬件验收 | 标签 UID/NDEF、刷卡事件、显式模拟模式 |
 | Matter 原生 controller | 未实现 | 建议经 HA |
 | ESPHome 原生 protobuf API | 未实现 | 建议经 HA 或 MQTT |
 
@@ -250,18 +262,20 @@ Southbound 的“扩散”是 **受控接入**，不是把 agent 代码复制到
 
 | 命令 | 作用 |
 |---|---|
+| `southbound survey` | 无主机网络/频段 survey、adapter readiness 与本地报告 |
 | `southbound discover --sweep` | 发现设备并写入 `data/inventory.json` |
 | `southbound scan --sweep` | 端口扫描（大网段建议 `--hosts` 定向） |
 | `southbound scan --hosts 192.168.1.10,192.168.1.20 --full` | 只扫关键设备 |
 | `southbound agent "哪些设备能跑 agent"` | 基于 inventory 的问答与接入方案 |
 | `southbound intent "打开客厅灯"` | northbound 意图 → southbound 动作 + trace |
-| `southbound serve` | 启动运行时与可视化面板 |
+| `southbound serve --token ...` | 启动共享 runtime；非 loopback API 需要 Bearer token |
+| `SOUTHBOUND_REMOTE_URL=... southbound call ...` | CLI 连接共享 runtime 执行能力 |
 | `southbound tools` | 接入层能力目录 |
 | `southbound call <device> <capability>` | 通过策略与审计执行能力 |
 | `southbound onboard ... --confirm` | 受控接入新设备 |
 | `southbound decommission <device> --confirm` | 移除已接入设备 |
 | `southbound access` | 适配器、策略、审计与运行时状态 |
-| `southbound mcp` | 启动 stdio MCP server |
+| `southbound mcp` | 启动 stdio MCP server；用 `--remote URL` 连接共享 runtime |
 | `southbound info` | 工具链地图 |
 
 ### MCP
@@ -287,9 +301,24 @@ claude mcp add --scope project southbound -- python3 /path/to/southbound/mcp_ser
 
 首次使用需要在 Claude Code 中批准该 server。
 
+如果已经用 `southbound serve` 启动了共享 runtime，可以让 MCP 连接它，而不是再创建一个设备图：
+
+```bash
+southbound mcp --remote http://127.0.0.1:8765
+```
+
+或使用环境变量：
+
+```bash
+SOUTHBOUND_REMOTE_URL=http://127.0.0.1:8765 python3 -m southbound.mcp_server
+```
+
+共享模式的 API、配置和安全边界见 [docs/RUNTIME_SERVICE.md](docs/RUNTIME_SERVICE.md)。
+
 ### HTTP
 
 - `GET /api/northbound/status|devices|catalog`
+- `GET /api/northbound/devices/<device_id>`
 - `POST /api/northbound/intent`
 - `POST /api/northbound/call`
 - `POST /api/northbound/commission`
@@ -326,6 +355,7 @@ southbound/
 │   ├── runtime.py           # SouthboundRuntime + EventBus + SSE
 │   ├── scene.py             # 2.5D presence、低风险反射与验证
 │   ├── discover.py          # ARP / mDNS / SSDP
+│   ├── survey.py            # 跨平台 survey / readiness / 报告
 │   ├── deep_scan.py         # 端口与服务指纹
 │   ├── registry.py          # OUI 与 T0–T3
 │   ├── agent.py             # inventory 问答
@@ -349,8 +379,9 @@ southbound/
 │   └── web/                 # 观测站面板 + scene.html / scene.js / splat.js
 ├── assets/                  # Logo、社交预览与品牌说明
 ├── config/access.example.json
-├── docs/                    # About、架构、协议、演示、接入层、onboarding、芯片、信号、硬件、扫描
-├── tests/                   # 55 项 unittest
+├── deploy/systemd/          # Pi 常驻 harness 示例
+├── docs/                    # About、架构、协议、演示、harness、接入层、onboarding、芯片、信号、硬件、扫描
+├── tests/                   # 89 项 unittest
 ├── data/                    # 本地生成，gitignored
 ├── viz_server.py            # 面板兼容入口
 ├── mcp_server.py            # MCP 兼容入口
@@ -377,7 +408,7 @@ make lint     # ruff check .
 make build    # wheel + sdist
 ```
 
-当前 55 项标准库测试覆盖分级规则、模拟器、agent 目标拆分、能力校验、策略、审计、工具目录、运行时/事件总线、受控接入与持久化、2.5D 场景 presence/自动验证、HA 适配器映射、MQTT payload 和 CLI 解析。
+当前 89 项标准库测试覆盖分级规则、模拟器、agent 目标拆分、能力校验、策略、审计、工具目录、运行时/事件总线、远程 runtime client/token、受控接入与持久化、2.5D 场景 presence/自动验证、survey 解析/readiness、HA 适配器映射、MQTT payload 和 CLI 解析，以及适配器注册、BLE/NFC 模拟读写、设备事件、驱动边界和资源释放。
 
 CI 在 Python 3.10–3.13 上跑 ruff、单元测试和 wheel/sdist 构建。
 
@@ -387,8 +418,11 @@ CI 在 Python 3.10–3.13 上跑 ruff、单元测试和 wheel/sdist 构建。
 - [About Southbound](docs/ABOUT.md) — 项目定位、命名与边界
 - [演示](docs/DEMO.md) — 面板、2.5D 房间、CLI、MCP 与故障排查
 - [2.5D 场景与 3DGS](docs/SCENE.md) — 当前控制图、坐标映射与高斯泼溅视觉层规划
+- [Survey 与 Harness 部署](docs/HARNESS.md) — 无主机 survey、Pi 最小 harness、硬件与验收
 - [协议与 API](docs/PROTOCOL.md) — northbound/southbound、HTTP、事件与 MCP schema
 - [技术架构与可行性](docs/ARCHITECTURE.md)
+- [共享 Runtime Service](docs/RUNTIME_SERVICE.md) — 一个设备图供 Dashboard / MCP / CLI 共用
+- [架构拆解图](docs/ARCHITECTURE_BREAKDOWN.md) — harness / MCP / core / adapters / devices 分层
 - [接入工具层](docs/ACCESS_LAYER.md)
 - [受控设备接入](docs/ONBOARDING.md)
 - [同类项目与定位](docs/COMPARISON.md)
@@ -404,21 +438,25 @@ CI 在 Python 3.10–3.13 上跑 ruff、单元测试和 wheel/sdist 构建。
 
 - LAN 发现、深扫、T0–T3 分级；
 - AccessHub 策略/审计/能力目录；
-- 四类 adapter、六个虚拟端点；
+- 六类 adapter、六个虚拟端点；BLE/NFC 尚待真实硬件验收；
 - SouthboundRuntime + EventBus + SSE + 面板 flowbar；
+- 共享 runtime service：Dashboard / MCP / CLI 可共用一个设备图和审计；
+- 远程 runtime client：`SOUTHBOUND_REMOTE_URL` / `southbound mcp --remote`；
+- 远程 runtime token 认证：loopback 免 token，非 loopback 需要 Bearer token；
 - 受控 onboarding / commissioning / 持久化 / 撤销；
 - 2.5D 房间实验：presence 信号、低风险自动反射、Agent notice、回读验证；
 - WebGL 合成 splat 预览：轨道相机、设备热点、avatar 投影；
+- 无主机 `survey`：Wi-Fi/BLE/radio 证据、服务指纹、Pi/Linux 支持、readiness 报告；
 - 15 个 MCP 工具；
-- 55 项测试、CI、wheel/sdist。
+- 89 项测试、CI、wheel/sdist。
 
 **下一步**
 
-- 独立 runtime service（多客户端共享一个设备图）；
+- 远程 runtime 的 TLS 与多用户身份（token 已实现；仍建议 loopback 或可信 LAN）；
 - 隔离区/审批 UI，从扫描结果一键预填 onboarding；
-- 设备侧事件订阅（MQTT/HA）；
+- Home Assistant WebSocket/事件订阅（MQTT/Zigbee2MQTT/BLE/NFC 设备事件已接入；HA REST 仍主要轮询）；
 - Matter 原生 controller、ESPHome 原生 API；
-- 真实 ESP32/Matter/Zigbee 硬件验证；
+- 真实 ESP32/Matter/Zigbee/BLE/NFC 硬件验证；
 - **真实 3DGS 视觉层（可选）**：当前已有合成 splat 预览；真实照片级效果需要采集视频、COLMAP + nerfstudio/gsplat 训练，再把 `.splat` 资产接入同一 WebGL 层。2.5D 地图仍是设备锚点、碰撞、策略与审计的权威层；大文件放 `data/` 或 Git LFS，不提交真实家庭影像。
 
 ## 安全与边界

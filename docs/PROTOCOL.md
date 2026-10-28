@@ -1,6 +1,6 @@
 # Protocol & API
 
-版本：`0.8.0`。这是一份面向实现的协议说明：北向 agent 如何调用 Southbound，南向 adapter 如何执行，事件长什么样。
+版本：`0.11.0`。这是一份面向实现的协议说明：北向 agent 如何调用 Southbound，南向 adapter 如何执行，事件长什么样。
 
 ## 1. 两个平面
 
@@ -23,7 +23,8 @@ Wi-Fi / Zigbee / Matter / ESPHome / MQTT
 | Method | Path | 作用 |
 |---|---|---|
 | GET | `/api/northbound/status` | 策略、adapter、设备数、事件数 |
-| GET | `/api/northbound/devices` | 设备与 capabilities |
+| GET | `/api/northbound/devices` | 设备与 capabilities；`?include_address=1` 含 adapter 地址 |
+| GET | `/api/northbound/devices/<device_id>` | 单设备描述；支持 `include_address` |
 | GET | `/api/northbound/catalog` | 跨设备能力目录 |
 | POST | `/api/northbound/intent` | 目标 → 动作 + trace |
 | POST | `/api/northbound/call` | 单次能力调用 |
@@ -42,6 +43,8 @@ Wi-Fi / Zigbee / Matter / ESPHome / MQTT
 | POST | `/api/scene/reset` | 重置房间与模拟器 |
 
 `/api/access/*`、`/api/agent` 是兼容别名。所有响应都是 JSON；SSE 使用 `text/event-stream`。
+
+`SouthboundRuntime` 默认嵌入进程；`southbound serve` 作为共享 runtime 时，MCP/CLI 通过 `SOUTHBOUND_REMOTE_URL` 使用同一组 HTTP 端点。见 [共享 Runtime Service](RUNTIME_SERVICE.md)。
 
 ### intent
 

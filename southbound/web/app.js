@@ -575,25 +575,27 @@
 
   function updateOnboardFields() {
     const adapter = $("#onboard-adapter").value;
+    const spec = (state.access?.adapter_catalog || []).find(item => item.name === adapter);
     document.querySelectorAll("#onboard-form [data-field]").forEach((field) => {
-      const name = field.dataset.field;
-      const show =
-        (adapter === "sim" && name === "state") ||
-        (adapter === "home_assistant" && name === "entity_id") ||
-        (adapter === "zigbee2mqtt" && name === "friendly_name") ||
-        (adapter === "mqtt" &&
-          (name === "command_topic" || name === "state_topic"));
-      field.hidden = !show;
+      field.hidden = !(spec?.fields || []).includes(field.dataset.field);
     });
+    const kinds = $("#onboard-form").kind;
+    const selected = kinds.value;
+    kinds.replaceChildren(...(spec?.kinds || []).map(kind => new Option(kind, kind)));
+    if ((spec?.kinds || []).includes(selected)) kinds.value = selected;
   }
 
-  function openOnboard() {
+  async function openOnboard() {
+    await refreshAccess();
     const form = $("#onboard-form");
     form.reset();
-    form.name.value = "演示传感器";
-    form.kind.value = "sensor";
+    const enabled = new Set((state.access?.adapters || []).map(item => item.name));
+    form.adapter.replaceChildren(...(state.access?.adapter_catalog || [])
+      .filter(item => enabled.has(item.name))
+      .map(item => new Option(item.name, item.name)));
+    form.name.value = "新设备";
     form.room.value = "客厅";
-    form.protocol.value = "Virtual";
+    form.protocol.value = "";
     form.tier.value = "T1";
     form.capabilities.value = "read";
     form.confirm.checked = true;
@@ -627,21 +629,23 @@
       .map((item) => item.trim())
       .filter(Boolean);
     if (capabilities.length) body.capabilities = capabilities;
-    if (adapter === "home_assistant") {
-      body.entity_id = form.entity_id.value.trim();
-    } else if (adapter === "zigbee2mqtt") {
-      body.friendly_name = form.friendly_name.value.trim();
-    } else if (adapter === "mqtt") {
-      body.command_topic = form.command_topic.value.trim();
-      body.state_topic = form.state_topic.value.trim();
-    }
-    if (adapter === "sim" && form.state.value.trim()) {
-      try {
-        body.state = JSON.parse(form.state.value);
-      } catch (_) {
-        error.textContent = "Sim state 不是合法 JSON。";
-        error.hidden = false;
-        return;
+    const spec = (state.access?.adapter_catalog || []).find(item => item.name === adapter);
+    for (const field of spec?.fields || []) {
+      const value = form.elements.namedItem(field)?.value?.trim();
+      if (!value) continue;
+      if (field === "state" || field === "connection") {
+        try {
+          body[field] = JSON.parse(value);
+          if (!body[field] || Array.isArray(body[field]) || typeof body[field] !== "object") {
+            throw new Error("object required");
+          }
+        } catch (_) {
+          error.textContent = `${field} 必须是合法 JSON 对象。`;
+          error.hidden = false;
+          return;
+        }
+      } else {
+        body[field] = value;
       }
     }
     if (!body.confirm) {
@@ -856,6 +860,12 @@
         return `northbound · state · ${shorten(event.name || event.device_id, 18)} · ${
           event.capability
         }`;
+      case "device.state":
+      case "device.notification":
+      case "device.tag":
+      case "device.connection":
+      case "device.error":
+        return `${event.simulated ? "模拟 · " : ""}${event.type} · ${shorten(event.name || event.device_id, 24)}`;
       case "commission.request":
         return `northbound · commission · ${shorten(
           event.name || event.device_id,

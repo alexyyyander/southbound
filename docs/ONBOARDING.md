@@ -121,7 +121,7 @@ southbound call demo_sensor read
 southbound decommission demo_sensor --confirm
 ```
 
-Dashboard 和 MCP 也使用同一个 `data/commissioned.json`。注意：多个进程各自维护运行时，CLI 接入后，已经运行中的 dashboard 需要刷新/重启才能看到新设备；独立 service 是下一步。
+Dashboard 和 MCP 默认也会读取同一个 `data/commissioned.json`。要让运行中的进程共享同一个设备图，请用 `southbound serve` 启动共享 runtime，并让 MCP/CLI 通过 `SOUTHBOUND_REMOTE_URL` 连接；否则多个进程各自维护运行时，CLI 接入后已运行的 dashboard 需要刷新/重启才能看到新设备。
 
 ## CLI
 
@@ -169,7 +169,7 @@ agent 可以提议接入，但策略要求显式确认；高风险能力还需�
 
 ## 仍是扩展点
 
-- 独立 runtime service（多客户端共享一个设备图）；
+- 共享 runtime 的认证/TLS 与多用户权限（本地 `southbound serve` 已支持）；
 - 待批准/隔离区（quarantine）与审批 UI；
 - 从 LAN 发现结果一键预填 commissioning 表单；
 - HA/MQTT 的接入后健康检查与自动重连；

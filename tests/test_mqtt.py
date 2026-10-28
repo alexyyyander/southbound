@@ -86,5 +86,40 @@ class MqttPayloadTest(unittest.TestCase):
         self.assertEqual(normalized["state_topic"], "zigbee2mqtt/living_plug")
 
 
+class MqttEventTest(unittest.TestCase):
+    def test_messages_reconnect_and_close_use_unified_event_path(self):
+        from types import SimpleNamespace
+        from unittest.mock import Mock, patch
+        from southbound.access.hub import AccessHub
+        from southbound.runtime import SouthboundRuntime
+
+        client = Mock()
+        fake_mqtt = SimpleNamespace(Client=Mock(return_value=client),
+                                    CallbackAPIVersion=SimpleNamespace(VERSION1=1))
+        with patch("southbound.access.adapters.mqtt.mqtt", fake_mqtt):
+            adapter = MqttAdapter("localhost", devices=[{
+                "device_id": "mqtt:test", "kind": "sensor",
+                "command_topic": "test/set", "state_topic": "test/state"}])
+            runtime = SouthboundRuntime(hub=AccessHub([adapter]))
+            self.addCleanup(runtime.close)
+            runtime.call("mqtt:test", "read")  # starts subscriptions without a prior write
+            client.on_connect(client, None, {}, 0)
+            client.subscribe.assert_called_with("test/state", qos=0)
+            client.on_message(client, None, SimpleNamespace(topic="test/state", payload=b'{"temperature":22}'))
+            event = runtime.recent_events()[-1]
+            self.assertEqual(event["type"], "device.state")
+            self.assertEqual(event["data"]["state"]["temperature"], 22)
+            self.assertEqual(runtime.call("mqtt:test", "read")["result"]["state"], {"temperature": 22})
+            runtime.decommission("mqtt:test", confirm=True)
+            client.unsubscribe.assert_called_with("test/state")
+            count = len(runtime.recent_events())
+            client.on_message(client, None, SimpleNamespace(topic="test/state", payload=b'{}'))
+            self.assertEqual(len(runtime.recent_events()), count)
+            runtime.close()
+            runtime.close()
+            client.disconnect.assert_called_once()
+            client.loop_stop.assert_called_once()
+
+
 if __name__ == "__main__":
     unittest.main()

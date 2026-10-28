@@ -3,166 +3,88 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Southbound · 局域网观测站</title>
+  <meta name="color-scheme" content="light">
+  <title>Southbound · 设备接入控制台</title>
   <link rel="stylesheet" href="/styles.css">
 </head>
 <body>
+  <a class="skip-link" href="#topology">跳到调用拓扑</a>
+  <aside class="sidebar" aria-label="主导航">
+    <a class="brand" href="/" aria-label="Southbound 首页"><span class="brand__mark">↓</span><span>Southbound<small>DEVICE ACCESS LAYER</small></span></a>
+    <div class="workspace"><span class="workspace__icon">S</span><div>本地实验室<small>Local workspace</small></div><span class="local-dot"></span></div>
+    <p class="nav-label">工作空间</p>
+    <nav class="nav">
+      <a href="#topology" class="is-active"><span>⌘</span>调用拓扑<span class="nav-index">01</span></a>
+      <a href="#activity"><span>≋</span>事件与调用<span class="nav-index">02</span></a>
+      <a href="#controls"><span>⊞</span>设备实验台<span class="nav-index">03</span></a>
+      <a href="#fleet"><span>◎</span>网络发现<span class="nav-index">04</span></a>
+    </nav>
+    <div class="sidebar__bottom">
+      <a class="scene-link" href="/scene"><span>◇</span><div>空间实验<small>打开 2.5D 房间</small></div><span>↗</span></a>
+      <div class="network-note"><span class="nav-label">发现快照</span><p id="rail-network" class="mono">等待扫描数据…</p><p id="rail-source" class="small"></p></div>
+      <div class="sidebar__footer"><span class="local-dot"></span> 本机运行 <span class="mono">ALPHA</span></div>
+    </div>
+  </aside>
   <div class="page">
     <header class="masthead">
-      <div class="masthead__intro">
-        <p class="issue">Southbound / 实验记录 001 · 2026-10-26 · 本机演示</p>
-        <h1>Southbound</h1>
-        <p class="lede">局域网观测站。把设备、agent 档位和一条可操作的模拟闭环放在同一张图上。左边观测，右边做实验。</p>
-        <p class="scene-cue"><a href="/scene">打开 2.5D 房间实验 →</a></p>
-      </div>
-      <div class="masthead__stats" aria-label="概览">
-        <div class="stat"><strong id="stat-devices">—</strong><span>台设备</span></div>
-        <div class="stat"><strong id="stat-tiers">—</strong><span>个档位</span></div>
-        <div class="stat"><strong id="stat-sim">—</strong><span>个模拟端点</span></div>
-      </div>
+      <div><p class="breadcrumb">工作空间 <span>/</span> 概览</p><h1>设备接入控制台<span class="badge">LOCAL</span></h1><p class="lede">从一次意图，到一次设备响应。</p></div>
+      <div class="header-actions"><span id="stream-status" class="stream-status">事件流连接中</span><button id="onboard-open" class="primary-button" type="button">＋ 接入设备</button></div>
     </header>
-
-    <section class="flowbar" aria-label="Northbound 与 Southbound 实时流">
-      <div class="flowbar__node">
-        <strong>Agent</strong>
-        <span>northbound API</span>
-      </div>
-      <div class="flowbar__track" data-track="north"><i></i></div>
-      <div class="flowbar__node flowbar__node--hub">
-        <strong>Southbound</strong>
-        <span>intent · policy · audit · adapters</span>
-      </div>
-      <div class="flowbar__track" data-track="south"><i></i></div>
-      <div class="flowbar__node">
-        <strong>Devices</strong>
-        <span>Wi-Fi / Zigbee / Matter</span>
-      </div>
-      <div class="flowbar__last">
-        <span id="flow-last">等待第一个意图</span>
-        <span id="flow-count">0 events</span>
-      </div>
+    <section class="metrics" aria-label="运行时概览">
+      <div class="metric"><span>已绑定设备</span><strong id="stat-sim">—</strong><small>进入统一能力目录</small></div>
+      <div class="metric"><span>已启用适配器</span><strong id="stat-tiers">—</strong><small id="adapter-summary">读取注册信息</small></div>
+      <div class="metric"><span>可调用能力</span><strong id="stat-capabilities">—</strong><small id="policy-summary">读取执行策略</small></div>
+      <div class="metric"><span>局域网发现</span><strong id="stat-devices">—</strong><small>历史快照 · 不代表已接入</small></div>
     </section>
-
     <main class="layout">
-      <aside class="rail panel" aria-label="图例与网络信息">
-        <section class="rail__block">
-          <h2>档位</h2>
-          <div class="legend">
-            <div><span class="swatch t3"></span><span>T3 边缘 GPU</span><span class="legend__note">3B–8B</span></div>
-            <div><span class="swatch t2"></span><span>T2 Linux SoC</span><span class="legend__note">0.5B–3B</span></div>
-            <div><span class="swatch t1"></span><span>T1 微控</span><span class="legend__note">反射型</span></div>
-            <div><span class="swatch t0"></span><span>T0 端点</span><span class="legend__note">只上报</span></div>
-            <div><span class="swatch tu"></span><span>未确定</span><span class="legend__note">待指纹</span></div>
-          </div>
-        </section>
-        <section class="rail__block">
-          <h2>网络</h2>
-          <p id="rail-network" class="mono">等待扫描数据…</p>
-          <p id="rail-source" class="small">数据来源：inventory.json / deep_scan.json</p>
-        </section>
-        <section class="rail__block">
-          <h2>工具层</h2>
-          <p id="rail-access" class="mono small">等待 AccessHub…</p>
-        </section>
-        <section class="rail__block">
-          <h2>读法</h2>
-          <p class="small">拓扑节点按档位着色。点击节点会筛选下方设备；点击设备行查看详情。模拟端点不依赖真实硬件，状态只保存在本机内存。</p>
-        </section>
-        <section class="rail__block rail__block--stamp">
-          <p class="stamp">SIMULATED<br>LOCAL ONLY</p>
-        </section>
-      </aside>
-
-      <section class="panel topology-panel" aria-labelledby="topology-title">
-        <div class="panel__head">
-          <h2 id="topology-title">网络拓扑</h2>
-          <p>网关、AP、NAS、打印机、ESP32 与终端集群。按 agent 档位着色。</p>
-        </div>
-        <div class="topology">
-          <svg id="topology-svg" viewBox="0 0 1000 560" role="img" aria-label="局域网拓扑示意图">
-            <defs>
-              <symbol id="icon-router" viewBox="0 0 24 24">
-                <rect x="3" y="13" width="18" height="7" rx="1.5"></rect>
-                <path d="M7 16.5h.01M10 16.5h.01"></path>
-                <path d="M8 13V9M16 13V9M8 9l-2-3M16 9l2-3"></path>
-              </symbol>
-              <symbol id="icon-nas" viewBox="0 0 24 24">
-                <rect x="4" y="4" width="16" height="16" rx="1.5"></rect>
-                <path d="M7 8h10M7 12h10M7 16h6"></path>
-                <circle cx="16" cy="16" r="1"></circle>
-              </symbol>
-              <symbol id="icon-printer" viewBox="0 0 24 24">
-                <path d="M7 8V4h10v4"></path>
-                <rect x="4" y="8" width="16" height="8" rx="1"></rect>
-                <path d="M7 16h10v4H7z"></path>
-                <path d="M17 11h.01"></path>
-              </symbol>
-              <symbol id="icon-chip" viewBox="0 0 24 24">
-                <rect x="7" y="7" width="10" height="10" rx="1"></rect>
-                <path d="M9 3v4M15 3v4M9 17v4M15 17v4M3 9h4M3 15h4M17 9h4M17 15h4"></path>
-              </symbol>
-              <symbol id="icon-laptop" viewBox="0 0 24 24">
-                <rect x="4" y="5" width="16" height="11" rx="1"></rect>
-                <path d="M2 19h20l-2-3H4z"></path>
-              </symbol>
-              <symbol id="icon-phone" viewBox="0 0 24 24">
-                <rect x="8" y="3" width="8" height="18" rx="2"></rect>
-                <path d="M11 18h2"></path>
-              </symbol>
-              <symbol id="icon-light" viewBox="0 0 24 24">
-                <circle cx="12" cy="12" r="4"></circle>
-                <path d="M12 2v2M12 20v2M2 12h2M20 12h2M5 5l1.5 1.5M17.5 17.5L19 19M19 5l-1.5 1.5M6.5 17.5L5 19"></path>
-              </symbol>
-              <symbol id="icon-plug" viewBox="0 0 24 24">
-                <circle cx="12" cy="12" r="6"></circle>
-                <path d="M9 9v3M15 9v3M12 18v3"></path>
-              </symbol>
-              <symbol id="icon-sensor" viewBox="0 0 24 24">
-                <path d="M10 4a2 2 0 0 1 4 0v9a4 4 0 1 1-4 0z"></path>
-                <path d="M12 8v5"></path>
-              </symbol>
-              <symbol id="icon-curtain" viewBox="0 0 24 24">
-                <path d="M4 3h16v18H4z"></path>
-                <path d="M8 3v18M12 3v18M16 3v18"></path>
-                <path d="M4 7h16"></path>
-              </symbol>
-              <symbol id="icon-door" viewBox="0 0 24 24">
-                <path d="M5 21V4h14v17"></path>
-                <path d="M15 12h.01"></path>
-                <path d="M5 21h14"></path>
-              </symbol>
-              <symbol id="icon-purifier" viewBox="0 0 24 24">
-                <rect x="5" y="3" width="14" height="18" rx="2"></rect>
-                <circle cx="12" cy="12" r="3"></circle>
-                <path d="M9 18h6"></path>
-              </symbol>
-            </defs>
-            <g id="topo-links"></g>
-            <g id="topo-rings"></g>
-            <g id="topo-nodes"></g>
+      <section class="panel topology-panel" id="topology" aria-labelledby="topology-title">
+        <div class="panel__head"><div><p class="eyebrow">CONNECTION MAP</p><h2 id="topology-title">调用拓扑</h2><p>协议、策略与设备之间的真实绑定关系。</p></div><div class="segmented" id="topology-scope" role="group" aria-label="显示的适配器"><button type="button" data-scope="all" aria-pressed="true">全部协议</button><button type="button" data-scope="enabled" aria-pressed="false">仅已启用</button></div></div>
+        <div class="topology-stages" aria-hidden="true"><span>01 <b>调用入口</b></span><span>02 <b>运行时</b></span><span>03 <b>协议适配器</b></span><span>04 <b>设备绑定</b></span></div>
+        <div class="topology" tabindex="0" aria-label="逻辑调用拓扑，可横向滚动查看">
+          <svg id="topology-svg" viewBox="0 0 1120 460" role="group" aria-label="Agent 经策略与协议适配器调用设备的逻辑拓扑">
+            <defs><marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="context-stroke"/></marker></defs>
+            <g id="topo-links"></g><g id="topo-rings"></g><g id="topo-nodes"></g>
           </svg>
         </div>
-        <div class="topology__caption">
-          <span id="topo-caption">正在读取设备…</span>
-          <span class="mono" id="topo-time"></span>
+        <div class="topology__caption"><div class="graph-legend"><span><i class="legend-line"></i>已绑定</span><span><i class="legend-line is-dashed"></i>未启用 / 无绑定</span><span><i class="legend-dot"></i>调用经过</span></div><span id="topo-caption">读取适配器…</span><span id="topo-time" hidden></span></div>
+        <div id="route-detail" class="route-detail" aria-live="polite"><p class="small">选择协议节点，查看绑定设备和能力。</p></div>
+      </section>
+      <section class="panel activity" id="activity" aria-labelledby="activity-title">
+        <div class="panel__head"><div><p class="eyebrow">LIVE ACTIVITY</p><h2 id="activity-title">事件流</h2></div><span id="flow-count" class="badge">0 events</span></div>
+        <div class="flowbar"><div class="flowbar__node">Agent</div><div class="flowbar__track" data-track="north"><i></i></div><div class="flowbar__node flowbar__node--hub">Runtime</div><div class="flowbar__track" data-track="south"><i></i></div><div class="flowbar__node">Device</div></div>
+        <p id="flow-last" class="last-event">等待第一个调用</p>
+        <div id="event-list" class="event-list" aria-label="最近事件"><div class="empty-state"><span>≋</span><p>事件将在这里出现</p><small>发起调用，查看命令、回读与设备上报。</small></div></div>
+      </section>
+      <section class="panel agent" aria-labelledby="agent-title">
+        <div class="panel__head">
+          <h2 id="agent-title">发起一次调用</h2>
+          <p>用模拟设备验证 intent → command → state。</p>
+        </div>
+        <form id="agent-form" class="agent__form">
+          <label class="visually-hidden" for="agent-input">目标</label>
+          <input id="agent-input" type="text" placeholder="例如：打开客厅灯并关掉书房插座" autocomplete="off">
+          <button id="agent-run" type="button">执行</button>
+        </form>
+        <div id="suggestions" class="suggestions" aria-label="示例目标"></div>
+        <div id="agent-trace" class="trace" aria-live="polite">
+          <p class="trace__empty">还没有执行目标。先试试“家里状态”。</p>
         </div>
       </section>
-
-      <section class="panel bench" aria-labelledby="bench-title">
+      <section class="panel bench" id="controls" aria-labelledby="bench-title">
         <div class="panel__head">
-          <h2 id="bench-title">模拟端点</h2>
-          <p>六个虚拟设备，覆盖 Matter / MQTT / Zigbee。</p>
+          <h2 id="bench-title">设备实验台 <span class="badge badge--amber">模拟</span></h2>
+          <p>控制虚拟端点，观察调用路径与状态回读。</p>
         </div>
         <div id="sim-devices" class="sim-grid" aria-live="polite"></div>
         <div class="bench__actions">
-          <button id="onboard-open" class="text-button" type="button">＋ 接入设备</button>
+          <span class="small">状态仅保存在当前运行时</span>
           <button id="sim-reset" class="text-button" type="button">重置模拟状态</button>
         </div>
       </section>
 
-      <section class="panel fleet" aria-labelledby="fleet-title">
+      <section class="panel fleet" id="fleet" aria-labelledby="fleet-title">
         <div class="panel__head">
-          <h2 id="fleet-title">设备清单</h2>
+          <h2 id="fleet-title">局域网发现记录</h2>
           <p id="fleet-count">0 台</p>
         </div>
         <div class="fleet__controls">
@@ -176,23 +98,9 @@
         <div id="fleet-detail" class="fleet__detail" hidden></div>
       </section>
 
-      <section class="panel agent" aria-labelledby="agent-title">
-        <div class="panel__head">
-          <h2 id="agent-title">Agent 控制台</h2>
-          <p>输入目标，观察它如何匹配设备、调用工具并回读状态。</p>
-        </div>
-        <form id="agent-form" class="agent__form">
-          <label class="visually-hidden" for="agent-input">目标</label>
-          <input id="agent-input" type="text" placeholder="例如：打开客厅灯并关掉书房插座" autocomplete="off">
-          <button id="agent-run" type="button">执行</button>
-        </form>
-        <div id="suggestions" class="suggestions" aria-label="示例目标"></div>
-        <div id="agent-trace" class="trace" aria-live="polite">
-          <p class="trace__empty">还没有执行目标。先试试“家里状态”。</p>
-        </div>
-      </section>
-    </main>
 
+    </main>
+    <footer class="footer"><span id="rail-access">读取运行时…</span><span>拓扑表示逻辑绑定，硬件在线状态以实际调用为准。</span></footer>
     <dialog id="onboard-dialog" class="onboard">
       <form id="onboard-form">
         <div class="onboard__head">
@@ -203,10 +111,6 @@
         <div class="onboard__grid">
           <label>Adapter
             <select id="onboard-adapter" name="adapter">
-              <option value="sim">sim（虚拟设备）</option>
-              <option value="home_assistant">home_assistant</option>
-              <option value="zigbee2mqtt">zigbee2mqtt</option>
-              <option value="mqtt">mqtt</option>
             </select>
           </label>
           <label>Device ID
@@ -259,6 +163,9 @@
           <label class="onboard__wide" data-field="state">Sim state JSON
             <textarea name="state" rows="2">{"temperature":22.5,"humidity":45,"battery":90}</textarea>
           </label>
+          <label class="onboard__wide" data-field="connection">连接参数 JSON
+            <textarea name="connection" rows="3" placeholder='BLE: {"address":"设备地址","read_char":"完整 UUID"}；NFC: {"path":"usb"}'></textarea>
+          </label>
         </div>
         <label class="onboard__check">
           <input type="checkbox" name="confirm" checked>
@@ -272,11 +179,8 @@
       </form>
     </dialog>
 
-    <footer class="footer">
-      <p>扫描与接入仅限自有或获授权网络。模拟端点不连接真实设备；所有状态只在本机内存中。</p>
-      <p class="mono">southbound · local demo</p>
-    </footer>
   </div>
+  <div id="toast" class="toast" role="status" hidden></div>
   <script src="/app.js"></script>
 </body>
 </html>
