@@ -34,6 +34,9 @@ Wi-Fi / Zigbee / Matter / ESPHome / MQTT
 | GET | `/api/events/recent?since=<id>` | 事件重放 |
 | GET | `/api/inventory` | 最近发现结果 |
 | GET | `/api/deep_scan` | 最近端口/服务扫描 |
+| GET | `/api/graph` | 持久化 LAN 图：身份、控制范围、状态、来源 |
+| GET | `/api/graph/devices/<device_id>` | 单个 LAN 图设备，支持 device_id 别名 |
+| GET | `/api/state` | LAN 图中所有设备的最新缓存状态 |
 | GET | `/api/sim/devices` | 虚拟端点状态 |
 | POST | `/api/sim/devices/<id>/action` | 模拟端点动作 |
 | POST | `/api/sim/reset` | 重置模拟器 |
@@ -42,7 +45,7 @@ Wi-Fi / Zigbee / Matter / ESPHome / MQTT
 | POST | `/api/scene/automation` | 开/关场景自动模式 |
 | POST | `/api/scene/reset` | 重置房间与模拟器 |
 
-`/api/access/*`、`/api/agent` 是兼容别名。所有响应都是 JSON；SSE 使用 `text/event-stream`。
+`/api/access/*`、`/api/agent` 是兼容别名。所有响应都是 JSON；SSE 使用 `text/event-stream`。LAN 图与事件日志持久化在 `data/lan_state.sqlite3`，事件 id 跨重启继续递增。
 
 `SouthboundRuntime` 默认嵌入进程；`southbound serve` 作为共享 runtime 时，MCP/CLI 通过 `SOUTHBOUND_REMOTE_URL` 使用同一组 HTTP 端点。见 [共享 Runtime Service](RUNTIME_SERVICE.md)。
 
@@ -206,6 +209,7 @@ data: {"id":12,"ts":"2026-10-26T17:00:00+08:00","type":"command","plane":"southb
 | `intent.result` | northbound | 目标执行结果 |
 | `command` | southbound | Southbound → adapter/设备 |
 | `state` | northbound | 设备状态回读 |
+| `device.state` / `device.notification` / `device.tag` / `device.connection` / `device.error` | northbound | 设备主动上报；HA `state_changed`、MQTT、BLE/NFC 共用此路径 |
 | `commission.request` | northbound | 请求接入 |
 | `commission` | southbound | adapter 验证/绑定 |
 | `commission.result` | northbound | 接入完成，能力就绪 |
@@ -274,6 +278,7 @@ data: {"id":12,"ts":"2026-10-26T17:00:00+08:00","type":"command","plane":"southb
 stdio MCP 工具：
 
 - 发现/深扫：`lan_inventory`、`device_details`、`signal_paths`、`integration_plan`、`deep_scan_lan`
+- LAN 图：`lan_graph`（可传 `device_id` 查看单个设备）
 - 模拟器：`sim_devices`、`sim_action`、`sim_goal`
 - 接入层：`iot_hub_status`、`iot_devices_list`、`iot_device_describe`、`iot_tool_catalog`、`iot_call`
 - 受控接入：`iot_commission`、`iot_decommission`

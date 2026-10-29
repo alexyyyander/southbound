@@ -15,17 +15,21 @@ surface over HTTP without changing the adapter or policy code.
 from __future__ import annotations
 
 import itertools
+import json
 import queue
 import re
 import threading
 from collections import deque
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Any
 
 from .access import AccessHub, build_hub
 from .access.capabilities import commissioned_capabilities
 from .access.commissioning import CommissionStore
 from .access.errors import AccessError, AdapterUnavailable, PolicyDenied, UnknownDevice
+from .event_store import EventStore
+from .graph import LANGraph
 from .sim_agent import run_goal
 from .simulator import Simulator
 
@@ -35,31 +39,56 @@ def _now() -> str:
 
 
 class EventBus:
-    """Thread-safe ring buffer plus SSE subscribers."""
+    """Thread-safe live events plus an optional durable replay log."""
 
-    def __init__(self, maxlen: int = 500) -> None:
+    def __init__(
+        self,
+        maxlen: int = 500,
+        store: EventStore | None = None,
+    ) -> None:
         self._lock = threading.Lock()
         self._events: deque[dict[str, Any]] = deque(maxlen=maxlen)
         self._subscribers: set[queue.Queue] = set()
         self._ids = itertools.count(1)
+        self._store = store
+        self._listener: Any = None
+
+    def set_listener(self, listener: Any) -> None:
+        """Attach a best-effort callback for graph/state projection."""
+        self._listener = listener
 
     def publish(self, event: dict[str, Any]) -> dict[str, Any]:
         with self._lock:
-            entry = {"id": next(self._ids), "ts": _now(), **event}
+            entry = {"ts": _now(), **event}
+            entry["id"] = (
+                self._store.append(entry)
+                if self._store is not None
+                else next(self._ids)
+            )
             self._events.append(entry)
             for subscriber in list(self._subscribers):
                 try:
                     subscriber.put_nowait(entry)
                 except queue.Full:
                     pass
-            return entry
+        if self._listener is not None:
+            try:
+                self._listener(entry)
+            except Exception:
+                # State projection must never break the execution path.
+                pass
+        return entry
 
     def recent(self, since: int = 0, limit: int = 100) -> list[dict[str, Any]]:
+        if self._store is not None:
+            return self._store.recent(since=since, limit=limit)
         with self._lock:
             events = [event for event in self._events if event["id"] > since]
             return events[-limit:]
 
     def count(self) -> int:
+        if self._store is not None:
+            return self._store.count()
         with self._lock:
             return len(self._events)
 
@@ -72,6 +101,10 @@ class EventBus:
     def unsubscribe(self, subscriber: queue.Queue) -> None:
         with self._lock:
             self._subscribers.discard(subscriber)
+
+    def close(self) -> None:
+        if self._store is not None:
+            self._store.close()
 
 
 class _AgentRuntime:
@@ -114,17 +147,89 @@ class SouthboundRuntime:
         config: dict[str, Any] | None = None,
         events: EventBus | None = None,
         store: CommissionStore | None = None,
+        graph: LANGraph | None = None,
     ) -> None:
         self.simulator = simulator or Simulator()
         self.hub = hub or build_hub(config=config, simulator=self.simulator)
         self.events = events or EventBus()
         self.store = store
+        self.graph = graph
         self._agent_runtime = _AgentRuntime(self)
         self._restore_commissioned()
+        if self.graph is not None:
+            self.events.set_listener(self._record_graph_event)
         self.hub.set_event_sink(self.events.publish)
+        self.sync_graph()
 
     def close(self) -> None:
         self.hub.close()
+        self.events.close()
+        if self.graph is not None:
+            self.graph.close()
+
+    def _record_graph_event(self, event: dict[str, Any]) -> None:
+        if self.graph is not None:
+            self.graph.record_event(event)
+
+    def sync_graph(self) -> dict[str, Any]:
+        """Merge current adapter bindings into the durable LAN graph."""
+        if self.graph is None:
+            return {}
+        bindings = list(self.hub.devices(include_address=True))
+        self.graph.record_bindings(bindings)
+        self.graph.reconcile_bindings(bindings)
+        return self.graph.snapshot()
+
+    def ingest_lan(
+        self,
+        inventory: dict[str, Any] | None = None,
+        deep_scan: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        """Merge discovery/deep-scan artifacts into the graph."""
+        if self.graph is None:
+            return {}
+        if inventory:
+            self.graph.record_inventory(inventory)
+        if deep_scan:
+            self.graph.record_deep_scan(deep_scan)
+        return self.sync_graph()
+
+    def ingest_lan_files(self, directory: str | Path) -> dict[str, Any]:
+        """Load the conventional inventory/deep-scan files into the graph."""
+        root = Path(directory)
+        inventory: dict[str, Any] = {}
+        deep_scan: dict[str, Any] = {}
+        for name, target in (
+            ("inventory.json", "inventory"),
+            ("deep_scan.json", "deep_scan"),
+        ):
+            path = root / name
+            if not path.exists():
+                continue
+            try:
+                payload = json.loads(path.read_text(encoding="utf-8"))
+            except (OSError, json.JSONDecodeError):
+                continue
+            if isinstance(payload, dict):
+                if target == "inventory":
+                    inventory = payload
+                else:
+                    deep_scan = payload
+        return self.ingest_lan(inventory, deep_scan)
+
+    def graph_snapshot(self) -> dict[str, Any]:
+        return (
+            self.graph.snapshot()
+            if self.graph is not None
+            else {"count": 0, "devices": []}
+        )
+
+    def graph_describe(self, device_id: str) -> dict[str, Any] | None:
+        return self.graph.describe(device_id) if self.graph is not None else None
+
+    def graph_device(self, device_id: str) -> dict[str, Any] | None:
+        """Remote-compatible alias for graph_describe."""
+        return self.graph_describe(device_id)
 
     def __enter__(self) -> "SouthboundRuntime":
         return self
@@ -400,6 +505,7 @@ class SouthboundRuntime:
                 "ok": True,
             }
         )
+        self.sync_graph()
         return {
             "ok": True,
             "adapter": adapter_name,
@@ -484,6 +590,7 @@ class SouthboundRuntime:
                 "ok": True,
             }
         )
+        self.sync_graph()
         return {"ok": True, "device": removed}
 
     # -- queries -----------------------------------------------------------
@@ -501,6 +608,7 @@ class SouthboundRuntime:
         status = self.hub.status()
         status["runtime"] = {
             "events": self.events.count(),
+            "graph_devices": self.graph.count() if self.graph is not None else 0,
             "northbound": "intent / call",
             "southbound": "policy / audit / adapters",
             "commissioned": len(self.store.list()) if self.store is not None else 0,

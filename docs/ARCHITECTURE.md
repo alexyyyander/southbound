@@ -26,7 +26,7 @@
             ┌───────────────────────────┼───────────────────────────┐
             ▼                           ▼                           ▼
       agent.py                  mcp_server.py                viz_server.py
-   inventory 问答 / 方案      stdio MCP（15 tools）        HTTP API + 可视化面板
+   inventory 问答 / 方案      stdio MCP（16 tools）        HTTP API + 可视化面板
             │                           │                           │
             └───────────────┬───────────┘                           ▼
                             ▼                                 southbound/web/
@@ -60,6 +60,7 @@ southbound sim "打开客厅灯并关掉书房插座"
 southbound tools
 southbound call living_light set_brightness --args '{"brightness": 30}'
 southbound access
+southbound graph --json
 southbound demo
 southbound mcp
 ```
@@ -76,13 +77,15 @@ southbound mcp
 | `sim_agent.py` | 目标拆分 → 设备匹配 → 动作 → 回读，输出可展示的 trace | 可用 |
 | `viz_server.py` | 本地面板 HTTP API，绑定 `127.0.0.1`；模拟器操作与 agent demo 经 AccessHub | 可用 |
 | `runtime.py` | SouthboundRuntime + EventBus：northbound intent/call、受控 onboarding、southbound adapter 管线、SSE 事件流 | 可用 |
-| `mcp_server.py` | stdio MCP，15 个工具：发现、深扫、模拟器、接入层、受控 onboarding | 可用 |
-| `cli.py` | 统一 CLI，含 `tools` / `call` / `onboard` / `decommission` / `access` | 可用 |
+| `graph.py` | 持久化 LAN 图：身份合并、控制范围、来源、缓存状态；SQLite | 可用 |
+| `event_store.py` | 持久事件日志：跨重启 id、最近事件重放 | 可用 |
+| `mcp_server.py` | stdio MCP，16 个工具：发现、深扫、LAN 图、模拟器、接入层、受控 onboarding | 可用 |
+| `cli.py` | 统一 CLI，含 `tools` / `call` / `graph` / `onboard` / `decommission` / `access` | 可用 |
 | `access/` | 设备/能力模型、参数校验、策略、审计、AccessHub、受控接入、六类 adapter | 可用 |
 | `access/commissioning.py` | 已授权设备的非敏感持久化记录与启动恢复 | 可用 |
 | `config/access.example.json` | HA / MQTT / Zigbee2MQTT 配置示例 | 可用 |
 | `southbound/web/` | 观测站风格可视化面板 | 可用 |
-| `tests/` | 标准库 unittest，覆盖分级、模拟闭环、接入层策略与审计、运行时/事件总线、远程 runtime client/token、受控接入、2.5D 场景、survey | 89 项通过 |
+| `tests/` | 标准库 unittest，覆盖分级、模拟闭环、接入层策略与审计、运行时/事件总线、远程 runtime client/token、受控接入、LAN 图与事件持久化、HA WebSocket 事件、2.5D 场景、survey | 103 项通过 |
 
 ### 接入工具层
 
@@ -103,7 +106,7 @@ southbound mcp
 
 - **northbound**：`intent(goal)` 把 agent 目标拆成动作；`call()` 执行单个能力；
 - **southbound**：由 `AccessHub` 选择 adapter 并执行；
-- **EventBus**：每次执行发出 `intent`、`command`（southbound/down）、`state`（northbound/up）和 `intent.result` 事件；
+- **EventBus**：每次执行发出 `intent`、`command`（southbound/down）、`state`（northbound/up）和 `intent.result` 事件；MQTT、HA WebSocket、BLE/NFC 的设备主动上报也进入同一路径；
 - **SSE**：`GET /api/events` 实时推送，`GET /api/events/recent?since=` 支持重放；
 - **面板 flowbar**：Agent → Southbound → Devices 的实时脉冲与最新事件；
 - **受控 onboarding**：`commission()` / `decommission()` 执行发现→授权→绑定→工具目录；`confirm` 与策略把“扩散”限制为受控接入，而不是自我复制。
@@ -187,7 +190,7 @@ southbound mcp
 ## 5. 部署形态
 
 - **本机 / NAS**：Python 3.10+，无第三方依赖；面板绑定 `127.0.0.1`，默认不对外。
-- **数据**：`data/inventory.json`、`data/deep_scan.json` 是本地生成物，已在 `.gitignore` 中排除。
+- **数据**：`data/inventory.json`、`data/deep_scan.json` 是本地生成物，已在 `.gitignore` 中排除；`data/lan_state.sqlite3` 保存 LAN 图与事件日志，同样不进仓库。
 - **HA / MQTT / Matter**：硬件阶段再引入。推荐 NAS 上跑 Home Assistant Container + Mosquitto + Zigbee2MQTT + Matter Server；面板保持为观测与实验层。
 - **网络**：实验室设备放独立 IoT SSID/VLAN，编排主机是唯一跨界的执行点。
 
@@ -200,7 +203,7 @@ southbound mcp
 | T0–T3 分级 | 规则引擎 | 中 | 未知厂商、型号歧义 | 作为规划启发式可用，需标注置信度 |
 | 接入工具层 | AccessHub + 六类 adapter | 高 | 真实设备鉴权、协议差异 | 模型/策略/审计/目录已完成；协议执行按 adapter 扩展 |
 | 受控 onboarding | commission / decommission + 持久化 | 高 | 真实配对、隔离区、审批 UI | 受控接入已跑通；自动扩散明确不做 |
-| 运行时与事件流 | SouthboundRuntime + EventBus + SSE | 高 | 跨进程一致性、背压 | 单进程闭环已跑通；`southbound serve` 已支持共享 runtime，远程认证/TLS 是下一步 |
+| 运行时与事件流 | SouthboundRuntime + EventBus + SSE + 持久事件日志 | 高 | 跨进程一致性、背压 | 单进程闭环已跑通；`southbound serve` 已支持共享 runtime，远程认证/TLS 是下一步 |
 | ESP32 / ESPHome 控制 | Sim 完整；真实设备经 HA/MQTT adapter | 高（有硬件） | 刷机、引脚、供电 | 最小闭环最成熟的一条路 |
 | Matter 控制 | 经 HomeAssistantAdapter | 中高 | 需 Matter Server + 蓝牙配网 | 标准协议，长期成本最低 |
 | Zigbee 控制 | 经 Zigbee2MqttAdapter | 高（有协调器） | 协调器、网络密钥、USB 干扰 | SLZB-06 + zigbee2mqtt 成熟 |
@@ -208,7 +211,7 @@ southbound mcp
 | LLM planner | 确定性 sim_agent + 工具目录 | 中高 | 工具调用可靠性、延迟、幻觉 | 3B 以上可用；必须保留策略与审计 |
 | “所有硬件”完整自主 | 不支持 | 低（字面） | 凭据、覆盖率、安全 | 预接入集合内可达 L3；全网无授权接管不可行 |
 | 可视化 | 已实现 | 高 | 数据新鲜度 | 适合观测与演示 |
-| MCP 外部 agent | 已实现（15 tools） | 高 | 客户端批准、权限 | 工具边界清晰，可逐步扩展 |
+| MCP 外部 agent | 已实现（16 tools） | 高 | 客户端批准、权限 | 工具边界清晰，可逐步扩展 |
 | 安全关键控制 | 策略/审计已实现，硬件未验证 | 中 | 门锁/电源/燃气的现场验证 | 工具层已强制高风险门；仍需现场演练 |
 
 ## 7. 关键架构决策
@@ -236,8 +239,9 @@ southbound mcp
 - **P0 发现与分级（已完成）**：ARP/mDNS/SSDP、深扫、OUI、T0–T3、MCP。
 - **P1 无硬件闭环与接入层（已完成）**：六设备模拟器、确定性 agent trace、可视化面板、统一 CLI、接入工具层（模型/策略/审计/四类 adapter）、SouthboundRuntime/EventBus/SSE、受控 onboarding/commissioning、测试。
 - **P1.5 2.5D 场景实验（已完成）**：可移动 avatar 产生 presence，场景反射规则经 AccessHub 执行并回读验证，`/scene` 提供可讲解的游戏化控制台。
+- **P1.6 持久化 LAN 图与事件日志（已完成）**：SQLite 合并 inventory/deep scan/commissioning/access binding，事件 id 跨重启并可重放；`/api/graph`、`/api/state`、`southbound graph`、MCP `lan_graph`。
 - **P2 第一条真实链路**：ESP32-S3 + ESPHome + 一个 Matter Wi-Fi 插座；HA/MQTT 落在 NAS；先经 HA/MQTT adapter 接入。
-- **P3 Zigbee 与事件流**：SLZB-06 + zigbee2mqtt；把轮询改成 MQTT 事件订阅。
+- **P3 Zigbee 与事件流（部分完成）**：SLZB-06 + zigbee2mqtt；MQTT/Z2M、BLE/NFC 和 HA WebSocket 事件已进入统一 EventBus；真实 Zigbee 硬件与 Z2M 现场验证仍未完成。
 - **P4 LLM planner**：在 sim_agent 的工具层上接本地 3B 模型；加策略引擎、审计与回滚。
 - **P5 生产化**：IoT VLAN、认证、多用户、打包与升级。
 - **可选视觉层**：合成 splat 预览已随 2.5D 场景发布；真实 3D Gaussian Splatting 资产作为后续真实感皮肤，设备锚点、碰撞、规则与审计仍以 2.5D 地图为准。

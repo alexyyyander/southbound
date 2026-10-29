@@ -42,6 +42,12 @@ class FakeRuntimeHandler(BaseHTTPRequestHandler):
         if parsed.path == "/api/northbound/catalog":
             self._json({"tools": [{"name": "light.turn_on"}]})
             return
+        if parsed.path == "/api/graph":
+            self._json({"count": 1, "devices": [{"device_id": "living_light"}]})
+            return
+        if parsed.path == "/api/graph/devices/living_light":
+            self._json({"device_id": "living_light", "control_scope": "control"})
+            return
         if parsed.path == "/api/events/recent":
             self._json({"events": [{"id": 1, "type": "state"}]})
             return
@@ -123,6 +129,11 @@ class RemoteRuntimeTest(unittest.TestCase):
             self.runtime.describe("living_light")["device_id"], "living_light"
         )
         self.assertEqual(self.runtime.catalog()[0]["name"], "light.turn_on")
+        self.assertEqual(self.runtime.graph()["count"], 1)
+        self.assertEqual(self.runtime.graph_snapshot()["count"], 1)
+        self.assertEqual(
+            self.runtime.graph_device("living_light")["control_scope"], "control"
+        )
         self.assertEqual(self.runtime.recent_events()[0]["type"], "state")
         self.assertEqual(self.runtime.sim_devices()["devices"][0]["id"], "living_light")
 

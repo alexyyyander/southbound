@@ -137,7 +137,7 @@ Agent 先读 catalog 或 `iot_devices_list`，再用 `iot_call` 执行。
   - `intent.result`：`plane=northbound`, `direction=out`
   - `commission.request` / `commission` / `commission.result`：受控接入握手
   - `decommission` / `decommission.result`：撤销接入
-- **SSE**：`GET /api/events` 实时推送；`GET /api/events/recent?since=<id>` 支持重放。
+- **SSE**：`GET /api/events` 实时推送；`GET /api/events/recent?since=<id>` 支持持久化重放；HA WebSocket 的 `state_changed` 事件会进入同一 EventBus。
 - **Dashboard**：顶部 flowbar 按 `plane` 在 Agent—Southbound 与 Southbound—Devices 两段上打点，显示最新事件和计数。
 
 运行时默认进程内；`southbound serve` 可作为共享 runtime service，Dashboard 使用它，MCP/CLI 可通过 `SOUTHBOUND_REMOTE_URL` 连接同一个设备图。见 [共享 Runtime Service](RUNTIME_SERVICE.md)。
@@ -194,7 +194,7 @@ Agent 先读 catalog 或 `iot_devices_list`，再用 `iot_call` 执行。
 | Adapter | 状态 | 适用 |
 |---|---|---|
 | `sim` | 完整实现 | 无硬件演示、测试策略与工具层 |
-| `home_assistant` | 完整实现（REST） | Matter / Zigbee / ESPHome / 厂商设备先接入 HA，再由本层调用 |
+| `home_assistant` | 完整 REST 实现；可选 WebSocket 状态事件 | Matter / Zigbee / ESPHome / 厂商设备先接入 HA，再由本层调用 |
 | `zigbee2mqtt` | 已实现，需 `paho-mqtt` | Zigbee 设备经 Zigbee2MQTT |
 | `mqtt` | 已实现，需 `paho-mqtt` | ESPHome/Tasmota/自定义 MQTT 设备 |
 | `ble` | 已实现，需 `bleak`；待硬件验收 | GATT 读写、通知、显式模拟模式 |
@@ -206,6 +206,12 @@ Agent 先读 catalog 或 `iot_devices_list`，再用 `iot_call` 执行。
 
 ```bash
 pip install -e ".[mqtt]"
+```
+
+Home Assistant WebSocket 状态事件需要 `websocket-client`：
+
+```bash
+pip install -e ".[ha]"
 ```
 
 Home Assistant 适配器只需要 `base_url` 和 token；token 从环境变量读取，不写进仓库：
@@ -240,6 +246,19 @@ cp config/access.example.json config/access.local.json
 }
 ```
 
+HA 适配器的实时状态事件在 adapter 配置中开启：
+
+```json
+{
+  "enabled": true,
+  "base_url": "http://homeassistant.local:8123",
+  "token_env": "HA_TOKEN",
+  "events": true
+}
+```
+
+`events: true` 需要安装 `southbound[ha]`；未安装时 REST 仍可用，但事件订阅会在 adapter 状态中报告错误。`ws_url` 可显式覆盖自动推导的 `ws(s)://.../api/websocket`。
+
 ## 7. Agent 接口
 
 ### MCP
@@ -255,6 +274,7 @@ cp config/access.example.json config/access.local.json
 | `iot_call` | 策略检查 + 审计后执行 |
 | `iot_commission` | 受控接入新设备（默认需要 confirm） |
 | `iot_decommission` | 移除已接入设备（默认需要 confirm） |
+| `lan_graph` | 持久化 LAN 图、身份、控制范围与缓存状态（可传 device_id） |
 
 `iot_call` 参数：
 
@@ -366,6 +386,7 @@ class MyAdapter(DeviceAdapter):
 - 模拟器、Home Assistant、MQTT、Zigbee2MQTT、BLE、NFC 六类 adapter；后两者已完成模拟与库边界测试，待真实硬件验收，见 [硬件适配器](HARDWARE_ADAPTERS.md)；
 - MCP、CLI、HTTP 三种入口；
 - SouthboundRuntime、EventBus、SSE 事件流与面板 flowbar；
+- 设备侧事件订阅：MQTT state、HA WebSocket `state_changed`、BLE 通知和 NFC 刷卡事件均已进入统一事件路径；
 - 受控 onboarding/commissioning、持久化与撤销；
 - 无硬件闭环与可视化；
 - 测试覆盖核心路径。
@@ -374,18 +395,17 @@ class MyAdapter(DeviceAdapter):
 
 - Matter 原生 controller（目前经 HA）；
 - ESPHome 原生 protobuf API（目前经 HA/MQTT）；
-- 设备侧事件订阅（MQTT 已缓存 state，但尚未做完整事件流）；
 - 共享 runtime 的认证/TLS 与多用户权限（`southbound serve` 已可共享设备图）；
 - commissioning 的隔离区/审批 UI 与从扫描结果一键预填；
 - 设备自动发现到 adapter 配置的自动生成；
 - 真实硬件上的延迟与可靠性数据。
 
-结论：作为 **IoT 全智能 agent 的接入工具层骨架**，它是完整的；作为**生产级控制系统**，还缺设备侧事件流、远程认证和现场验证；共享 runtime service 已具备本地模式。
+结论：作为 **IoT 全智能 agent 的接入工具层骨架**，它是完整的；作为**生产级控制系统**，还缺远程认证/TLS、审批 UI 和真实硬件现场验证；共享 runtime service 已具备本地模式。
 
 ## 11. 下一步
 
 1. 用模拟器验证策略与审计，再上真实 ESP32/Matter。
-2. 接 Home Assistant 后，把 Matter/Zigbee 设备统一经 HA adapter 接入。
-3. 加 Zigbee2MQTT MQTT 事件订阅，把 `read` 从轮询变成事件缓存。
+2. 接 Home Assistant 后，把 Matter/Zigbee 设备统一经 HA adapter 接入；需要实时状态时启用 HA WebSocket 事件。
+3. 生产化远程访问：TLS、多用户身份、隔离区/审批 UI。
 4. 为高风险设备单独设计确认流程（人工、双人、时间窗）。
 5. 最后再接 LLM planner；工具层保持不变。

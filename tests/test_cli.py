@@ -28,6 +28,11 @@ class CliParserTest(unittest.TestCase):
         args = build_parser().parse_args(["access"])
         self.assertEqual(args.command, "access")
 
+    def test_graph_command(self) -> None:
+        args = build_parser().parse_args(["graph", "--device", "mqtt:hall-lamp"])
+        self.assertEqual(args.command, "graph")
+        self.assertEqual(args.device, "mqtt:hall-lamp")
+
     def test_survey_command(self) -> None:
         args = build_parser().parse_args(["survey", "--no-ports", "--ble", "--no-wifi"])
         self.assertEqual(args.command, "survey")

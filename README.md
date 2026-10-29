@@ -58,13 +58,14 @@
 | **接入工具层** | DeviceBinding / Capability / Risk / Tool Catalog / JSON Schema 参数校验 |
 | **策略与审计** | read_only / supervised / autonomous；每次调用写 JSONL 审计 |
 | **受控 onboarding** | 发现 → 授权 → 绑定 adapter/策略 → 工具目录；支持撤销与持久化 |
-| **多协议 adapter** | Simulator、Home Assistant REST、MQTT、Zigbee2MQTT、BLE GATT、NFC；BLE/NFC 已通过模拟与驱动替身测试，待硬件验收 |
+| **多协议 adapter** | Simulator、Home Assistant REST + 可选 WebSocket 事件、MQTT、Zigbee2MQTT、BLE GATT、NFC；BLE/NFC 已通过模拟与驱动替身测试，待硬件验收 |
 | **运行时与事件流** | SouthboundRuntime + EventBus + SSE；`serve` 可作为共享 runtime，MCP/CLI 通过 `SOUTHBOUND_REMOTE_URL` 连接 |
+| **LAN 设备图** | SQLite 持久化设备身份、能力、来源、控制范围与缓存状态；合并 inventory / deep scan / commissioning / access binding |
 | **共享 runtime** | 一个设备图、策略和审计供 Dashboard / MCP / CLI 共用；支持 `southbound mcp --remote` 与 Bearer token |
 | **2.5D 房间实验** | `GET /scene`：可移动 avatar、presence 信号、点击设备、自动反射与回读验证 |
 | **Splat 预览** | `/scene` 内切换 WebGL 合成 splat：轨道旋转、设备热点、avatar 投影；同一控制层 |
 | **可视化** | 网络拓扑、设备清单、模拟端点、Agent 控制台、接入表单 |
-| **MCP** | 15 个工具：发现、深扫、模拟器、接入层、受控 onboarding |
+| **MCP** | 16 个工具：发现、深扫、LAN 图、模拟器、接入层、受控 onboarding |
 | **无硬件闭环** | 六个虚拟端点 + 确定性 agent trace，没有设备也能跑 |
 
 BLE / NFC 的配置、事件入口与无硬件演示见 [硬件适配器说明](docs/HARDWARE_ADAPTERS.md)。
@@ -126,6 +127,12 @@ MQTT 适配器需要可选依赖：
 
 ```bash
 python3 -m pip install -e ".[mqtt]"
+```
+
+Home Assistant WebSocket 状态事件需要：
+
+```bash
+python3 -m pip install -e ".[ha]"
 ```
 
 完整演示（面板、CLI、MCP、故障排查）见 [docs/DEMO.md](docs/DEMO.md)。
@@ -248,7 +255,7 @@ Southbound 的“扩散”是 **受控接入**，不是把 agent 代码复制到
 | Adapter | 状态 | 用途 |
 |---|---|---|
 | `sim` | 完整实现 | 无硬件演示、测试策略与工具层 |
-| `home_assistant` | 完整 REST 实现 | Matter / Zigbee / ESPHome / 厂商设备先接入 HA |
+| `home_assistant` | 完整 REST 实现；可选 WebSocket 状态事件 | Matter / Zigbee / ESPHome / 厂商设备先接入 HA |
 | `zigbee2mqtt` | 已实现，需 `paho-mqtt` | Zigbee 设备经 Zigbee2MQTT |
 | `mqtt` | 已实现，需 `paho-mqtt` | ESPHome / Tasmota / 自定义 MQTT 设备 |
 | `ble` | 已实现，需 `bleak`；待硬件验收 | GATT 读写、通知、显式模拟模式 |
@@ -275,6 +282,7 @@ Southbound 的“扩散”是 **受控接入**，不是把 agent 代码复制到
 | `southbound onboard ... --confirm` | 受控接入新设备 |
 | `southbound decommission <device> --confirm` | 移除已接入设备 |
 | `southbound access` | 适配器、策略、审计与运行时状态 |
+| `southbound graph` | 查看持久化 LAN 设备图（`--json` / `--device`） |
 | `southbound mcp` | 启动 stdio MCP server；用 `--remote URL` 连接共享 runtime |
 | `southbound info` | 工具链地图 |
 
@@ -295,6 +303,7 @@ claude mcp add --scope project southbound -- python3 /path/to/southbound/mcp_ser
 | 分组 | 工具 |
 |---|---|
 | 发现与方案 | `lan_inventory`、`device_details`、`signal_paths`、`integration_plan`、`deep_scan_lan` |
+| LAN 图 | `lan_graph` |
 | 模拟器 | `sim_devices`、`sim_action`、`sim_goal` |
 | 接入层 | `iot_hub_status`、`iot_devices_list`、`iot_device_describe`、`iot_tool_catalog`、`iot_call` |
 | 受控 onboarding | `iot_commission`、`iot_decommission` |
@@ -325,6 +334,7 @@ SOUTHBOUND_REMOTE_URL=http://127.0.0.1:8765 python3 -m southbound.mcp_server
 - `POST /api/northbound/decommission`
 - `GET /api/events`（SSE）
 - `GET /api/events/recent?since=<id>`
+- `GET /api/graph`、`GET /api/graph/devices/<device_id>`、`GET /api/state`
 - `GET /api/inventory`、`GET /api/deep_scan`、`GET /api/sim/devices`
 - `GET /api/scene/state`、`POST /api/scene/presence`、`POST /api/scene/automation`、`POST /api/scene/reset`
 - `POST /api/sim/devices/<id>/action`、`POST /api/sim/reset`
@@ -344,6 +354,7 @@ export HA_TOKEN="..."
 - Home Assistant token 只从环境变量读取；
 - MQTT 用户名/密码同样用环境变量；
 - 已授权设备记录写在 `data/commissioned.json`，不含 token/password；
+- LAN 设备图与事件日志写在 `data/lan_state.sqlite3`；
 - 数据文件都在 `data/`，默认不进入仓库。
 
 ## 仓库结构
@@ -353,6 +364,8 @@ southbound/
 ├── southbound/
 │   ├── cli.py               # 统一 CLI
 │   ├── runtime.py           # SouthboundRuntime + EventBus + SSE
+│   ├── graph.py             # 持久化 LAN 设备图
+│   ├── event_store.py       # 持久事件日志
 │   ├── scene.py             # 2.5D presence、低风险反射与验证
 │   ├── discover.py          # ARP / mDNS / SSDP
 │   ├── survey.py            # 跨平台 survey / readiness / 报告
@@ -381,7 +394,7 @@ southbound/
 ├── config/access.example.json
 ├── deploy/systemd/          # Pi 常驻 harness 示例
 ├── docs/                    # About、架构、协议、演示、harness、接入层、onboarding、芯片、信号、硬件、扫描
-├── tests/                   # 89 项 unittest
+├── tests/                   # 103 项 unittest
 ├── data/                    # 本地生成，gitignored
 ├── viz_server.py            # 面板兼容入口
 ├── mcp_server.py            # MCP 兼容入口
@@ -408,7 +421,7 @@ make lint     # ruff check .
 make build    # wheel + sdist
 ```
 
-当前 89 项标准库测试覆盖分级规则、模拟器、agent 目标拆分、能力校验、策略、审计、工具目录、运行时/事件总线、远程 runtime client/token、受控接入与持久化、2.5D 场景 presence/自动验证、survey 解析/readiness、HA 适配器映射、MQTT payload 和 CLI 解析，以及适配器注册、BLE/NFC 模拟读写、设备事件、驱动边界和资源释放。
+当前 103 项标准库测试覆盖分级规则、模拟器、agent 目标拆分、能力校验、策略、审计、工具目录、运行时/事件总线、持久化 LAN 图与事件日志、远程 runtime client/token、受控接入与持久化、2.5D 场景 presence/自动验证、survey 解析/readiness、HA 适配器映射、MQTT payload 和 CLI 解析，以及适配器注册、BLE/NFC 模拟读写、设备事件、驱动边界和资源释放。
 
 CI 在 Python 3.10–3.13 上跑 ruff、单元测试和 wheel/sdist 构建。
 
@@ -441,20 +454,22 @@ CI 在 Python 3.10–3.13 上跑 ruff、单元测试和 wheel/sdist 构建。
 - 六类 adapter、六个虚拟端点；BLE/NFC 尚待真实硬件验收；
 - SouthboundRuntime + EventBus + SSE + 面板 flowbar；
 - 共享 runtime service：Dashboard / MCP / CLI 可共用一个设备图和审计；
+- 持久化 LAN 设备图：SQLite 身份合并、控制范围、来源和缓存状态；
+- 持久事件日志：事件 id 跨重启，`/api/events/recent` 可重放；
+- Home Assistant WebSocket 状态事件：可选 `websocket-client`，事件进入同一 EventBus；
 - 远程 runtime client：`SOUTHBOUND_REMOTE_URL` / `southbound mcp --remote`；
 - 远程 runtime token 认证：loopback 免 token，非 loopback 需要 Bearer token；
 - 受控 onboarding / commissioning / 持久化 / 撤销；
 - 2.5D 房间实验：presence 信号、低风险自动反射、Agent notice、回读验证；
 - WebGL 合成 splat 预览：轨道相机、设备热点、avatar 投影；
 - 无主机 `survey`：Wi-Fi/BLE/radio 证据、服务指纹、Pi/Linux 支持、readiness 报告；
-- 15 个 MCP 工具；
-- 89 项测试、CI、wheel/sdist。
+- 16 个 MCP 工具；
+- 103 项测试、CI、wheel/sdist。
 
 **下一步**
 
 - 远程 runtime 的 TLS 与多用户身份（token 已实现；仍建议 loopback 或可信 LAN）；
 - 隔离区/审批 UI，从扫描结果一键预填 onboarding；
-- Home Assistant WebSocket/事件订阅（MQTT/Zigbee2MQTT/BLE/NFC 设备事件已接入；HA REST 仍主要轮询）；
 - Matter 原生 controller、ESPHome 原生 API；
 - 真实 ESP32/Matter/Zigbee/BLE/NFC 硬件验证；
 - **真实 3DGS 视觉层（可选）**：当前已有合成 splat 预览；真实照片级效果需要采集视频、COLMAP + nerfstudio/gsplat 训练，再把 `.splat` 资产接入同一 WebGL 层。2.5D 地图仍是设备锚点、碰撞、策略与审计的权威层；大文件放 `data/` 或 Git LFS，不提交真实家庭影像。

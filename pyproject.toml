@@ -42,6 +42,7 @@ dependencies = []
 
 [project.optional-dependencies]
 mqtt = ["paho-mqtt>=2.0"]
+ha = ["websocket-client>=1.8"]
 survey = ["bleak>=0.22"]
 ble = ["bleak>=0.22"]
 nfc = ["nfcpy>=1.0.4"]

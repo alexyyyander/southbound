@@ -16,6 +16,8 @@
       "base_url": "http://homeassistant.local:8123",
       "token_env": "HA_TOKEN",
       "timeout": 4.0,
+      "events": false,
+      "ws_url": "",
       "devices": [
         {
           "device_id": "ha:light.living_room",

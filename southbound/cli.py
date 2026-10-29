@@ -26,8 +26,10 @@ from .access.registry import REGISTRY
 from .access.commissioning import CommissionStore
 from .access.errors import AccessError
 from .client import RemoteRuntime
+from .event_store import EventStore
+from .graph import LANGraph
 from .paths import DATA_DIR
-from .runtime import SouthboundRuntime
+from .runtime import EventBus, SouthboundRuntime
 
 _RUNTIMES: list[SouthboundRuntime | RemoteRuntime] = []
 
@@ -39,9 +41,13 @@ def _runtime() -> SouthboundRuntime | RemoteRuntime:
             remote, token=os.environ.get("SOUTHBOUND_REMOTE_TOKEN", "")
         )
     else:
+        state_db = DATA_DIR / "lan_state.sqlite3"
         runtime = SouthboundRuntime(
-            store=CommissionStore(DATA_DIR / "commissioned.json")
+            store=CommissionStore(DATA_DIR / "commissioned.json"),
+            graph=LANGraph(state_db),
+            events=EventBus(store=EventStore(state_db)),
         )
+        runtime.ingest_lan_files(DATA_DIR)
     _RUNTIMES.append(runtime)
     return runtime
 
@@ -209,6 +215,33 @@ def cmd_access(_args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_graph(args: argparse.Namespace) -> int:
+    runtime = _runtime()
+    if args.device:
+        device = runtime.graph_device(args.device)
+        if device is None:
+            print(f"unknown graph device: {args.device}", file=sys.stderr)
+            return 1
+        print(json.dumps(device, ensure_ascii=False, indent=2))
+        return 0
+    snapshot = runtime.graph_snapshot()
+    if args.json:
+        print(json.dumps(snapshot, ensure_ascii=False, indent=2))
+        return 0
+    counts = snapshot.get("counts") or {}
+    print(
+        f"LAN graph: {snapshot.get('count', 0)} devices · "
+        f"{counts.get('control', 0)} control · {counts.get('observe', 0)} observe · "
+        f"{counts.get('inventory', 0)} inventory"
+    )
+    for device in snapshot.get("devices", []):
+        print(
+            f"  {device['device_id']:<28} {device['control_scope']:<9} "
+            f"{device['authorization']:<10} {device['name']}"
+        )
+    return 0
+
+
 def cmd_onboard(args: argparse.Namespace) -> int:
     runtime = _runtime()
     request = {
@@ -303,6 +336,7 @@ def cmd_info(_args: argparse.Namespace) -> int:
     print("  onboard   受控接入新设备（需 --confirm）")
     print("  decommission 移除已接入设备（需 --confirm）")
     print("  access    适配器、策略、审计与事件状态")
+    print("  graph     持久化 LAN 设备图与跨协议身份")
     print("  demo      可视化面板（serve 的别名）")
     print("  mcp       stdio MCP server")
     print(
@@ -417,6 +451,11 @@ def build_parser() -> argparse.ArgumentParser:
 
     p = sub.add_parser("access", help="show adapters, policy, and audit status")
     p.set_defaults(func=cmd_access)
+
+    p = sub.add_parser("graph", help="show the durable LAN device graph")
+    p.add_argument("--device", default="", help="show one graph device by id")
+    p.add_argument("--json", action="store_true")
+    p.set_defaults(func=cmd_graph)
 
     p = sub.add_parser(
         "onboard", help="commission a device with explicit authorization"
