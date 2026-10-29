@@ -48,6 +48,12 @@ class FakeRuntimeHandler(BaseHTTPRequestHandler):
         if parsed.path == "/api/graph/devices/living_light":
             self._json({"device_id": "living_light", "control_scope": "control"})
             return
+        if parsed.path == "/api/interaction/endpoints":
+            self._json({"endpoints": [{"endpoint_id": "phone-owner"}]})
+            return
+        if parsed.path == "/api/interaction/sessions":
+            self._json({"sessions": [{"session_id": "s-1"}]})
+            return
         if parsed.path == "/api/events/recent":
             self._json({"events": [{"id": 1, "type": "state"}]})
             return
@@ -86,6 +92,26 @@ class FakeRuntimeHandler(BaseHTTPRequestHandler):
         if parsed.path == "/api/sim/devices/living_light/action":
             self._json(
                 {"ok": True, "device": {"id": "living_light", "state": {"on": True}}}
+            )
+            return
+        if parsed.path == "/api/interaction/input":
+            self._json(
+                {
+                    "ok": True,
+                    "session": {"session_id": body.get("session_id") or "s-1"},
+                    "outputs": [],
+                }
+            )
+            return
+        if parsed.path == "/api/interaction/handoff":
+            self._json(
+                {
+                    "ok": True,
+                    "session": {
+                        "session_id": body["session_id"],
+                        "input_endpoint": body["endpoint_id"],
+                    },
+                }
             )
             return
         if parsed.path == "/api/sim/reset":
@@ -163,6 +189,18 @@ class RemoteRuntimeTest(unittest.TestCase):
             self.runtime.call("locked", "unlock")
         self.assertTrue(context.exception.requires_confirmation)
         self.assertEqual(context.exception.status, 400)
+
+    def test_interaction_surface(self) -> None:
+        self.assertEqual(
+            self.runtime.interaction_endpoints()[0]["endpoint_id"], "phone-owner"
+        )
+        self.assertEqual(self.runtime.interaction_sessions()[0]["session_id"], "s-1")
+        result = self.runtime.interaction_input(
+            {"endpoint_id": "phone-owner", "text": "hello"}
+        )
+        self.assertTrue(result["ok"])
+        moved = self.runtime.interaction_handoff("s-1", "pi-living")
+        self.assertEqual(moved["session"]["input_endpoint"], "pi-living")
 
 
 if __name__ == "__main__":

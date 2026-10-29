@@ -28,6 +28,7 @@ from .access.errors import AccessError
 from .client import RemoteRuntime
 from .event_store import EventStore
 from .graph import LANGraph
+from .interaction import InteractionService, InteractionStore
 from .paths import DATA_DIR
 from .runtime import EventBus, SouthboundRuntime
 
@@ -242,6 +243,39 @@ def cmd_graph(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_interact(args: argparse.Namespace) -> int:
+    runtime = _runtime()
+    request = {
+        "endpoint_id": args.endpoint,
+        "text": " ".join(args.text).strip(),
+        "session_id": args.session,
+        "output_endpoints": args.output,
+        "execute": not args.no_execute,
+    }
+    if not hasattr(runtime, "events"):
+        try:
+            result = runtime.interaction_input(request)
+        except (AccessError, KeyError, ValueError) as exc:
+            print(f"interaction error: {exc}", file=sys.stderr)
+            return 1
+        print(json.dumps(result, ensure_ascii=False, indent=2))
+        return 0 if result.get("ok", True) else 1
+    service = InteractionService(
+        runtime,
+        InteractionStore(DATA_DIR / "interaction.sqlite3"),
+        seed_simulated=True,
+    )
+    try:
+        result = service.handle_input(request)
+    except (AccessError, KeyError, ValueError) as exc:
+        print(f"interaction error: {exc}", file=sys.stderr)
+        return 1
+    finally:
+        service.close()
+    print(json.dumps(result, ensure_ascii=False, indent=2))
+    return 0 if result.get("ok", True) else 1
+
+
 def cmd_onboard(args: argparse.Namespace) -> int:
     runtime = _runtime()
     request = {
@@ -337,6 +371,7 @@ def cmd_info(_args: argparse.Namespace) -> int:
     print("  decommission 移除已接入设备（需 --confirm）")
     print("  access    适配器、策略、审计与事件状态")
     print("  graph     持久化 LAN 设备图与跨协议身份")
+    print("  interact  多硬件会话：输入、输出路由与 handoff")
     print("  demo      可视化面板（serve 的别名）")
     print("  mcp       stdio MCP server")
     print(
@@ -456,6 +491,16 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--device", default="", help="show one graph device by id")
     p.add_argument("--json", action="store_true")
     p.set_defaults(func=cmd_graph)
+
+    p = sub.add_parser(
+        "interact", help="send one text turn through an interaction endpoint"
+    )
+    p.add_argument("text", nargs="*")
+    p.add_argument("--endpoint", default="mac-dashboard")
+    p.add_argument("--session", default="")
+    p.add_argument("--output", action="append", default=[], help="output endpoint id")
+    p.add_argument("--no-execute", action="store_true")
+    p.set_defaults(func=cmd_interact)
 
     p = sub.add_parser(
         "onboard", help="commission a device with explicit authorization"

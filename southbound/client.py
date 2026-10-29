@@ -121,6 +121,24 @@ class RemoteRuntime:
         encoded = urllib.parse.quote(device_id, safe="")
         return self._request("GET", f"/api/graph/devices/{encoded}")
 
+    def interaction_endpoints(self) -> list[dict[str, Any]]:
+        payload = self._request("GET", "/api/interaction/endpoints")
+        return list(payload.get("endpoints") or [])
+
+    def interaction_sessions(self) -> list[dict[str, Any]]:
+        payload = self._request("GET", "/api/interaction/sessions")
+        return list(payload.get("sessions") or [])
+
+    def interaction_input(self, payload: dict[str, Any]) -> dict[str, Any]:
+        return self._request("POST", "/api/interaction/input", payload)
+
+    def interaction_handoff(self, session_id: str, endpoint_id: str) -> dict[str, Any]:
+        return self._request(
+            "POST",
+            "/api/interaction/handoff",
+            {"session_id": session_id, "endpoint_id": endpoint_id},
+        )
+
     def intent(self, goal: str) -> dict[str, Any]:
         return self._request("POST", "/api/northbound/intent", {"goal": goal})
 

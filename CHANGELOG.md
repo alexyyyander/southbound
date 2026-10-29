@@ -21,8 +21,12 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `state_changed` events, with auth/subscribe handshake, reconnect backoff,
   ping/pong, adapter event status, and the same EventBus/graph path as MQTT
   and BLE/NFC events.
+- **Multi-endpoint interaction plane**: endpoint profiles, sessions, modality
+  routing, cross-endpoint outputs, handoff, `/interaction` dashboard, HTTP API,
+  `southbound interact`, and MCP `interaction_endpoints` / `interaction_input`.
 - Tests for graph identity merging, persistence, runtime state projection,
-  event replay, and HA WebSocket handshake/state mapping (103 tests total).
+  event replay, HA WebSocket handshake/state mapping, and interaction routing
+  (122 tests total).
 
 ## [0.11.0] - 2026-10-27
 

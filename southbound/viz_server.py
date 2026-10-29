@@ -36,6 +36,7 @@ from .access.commissioning import CommissionStore
 from .access.errors import AccessError
 from .event_store import EventStore
 from .graph import LANGraph
+from .interaction import InteractionService, InteractionStore
 from .paths import DATA_DIR, WEB_DIR
 from .runtime import EventBus, SouthboundRuntime
 from .scene import SceneController
@@ -51,6 +52,11 @@ RUNTIME = SouthboundRuntime(
 SIM = RUNTIME.simulator
 HUB = RUNTIME.hub
 SCENE = SceneController(RUNTIME)
+INTERACTION = InteractionService(
+    RUNTIME,
+    InteractionStore(DATA_DIR / "interaction.sqlite3"),
+    seed_simulated=True,
+)
 
 
 def _load_json(name: str) -> dict:
@@ -145,11 +151,28 @@ class Handler(BaseHTTPRequestHandler):
         if path == "/api/sim/devices":
             self._json({"devices": SIM.list_devices(), "summary": SIM.summary()})
             return
+        if path == "/api/interaction/endpoints":
+            self._json({"endpoints": INTERACTION.endpoints()})
+            return
+        if path == "/api/interaction/sessions":
+            self._json({"sessions": INTERACTION.sessions()})
+            return
+        if path.startswith("/api/interaction/sessions/"):
+            session_id = unquote(path[len("/api/interaction/sessions/") :]).strip("/")
+            session = INTERACTION.session(session_id)
+            if session is None:
+                self._json({"error": "unknown session"}, status=404)
+            else:
+                self._json(session)
+            return
         if path == "/api/scene/state":
             self._json(SCENE.snapshot())
             return
         if path in ("/scene", "/scene.html"):
             self._static("/scene.html")
+            return
+        if path in ("/interaction", "/interaction.html"):
+            self._static("/interaction.html")
             return
         if path in ("/api/access/status", "/api/northbound/status"):
             self._json(RUNTIME.status())
@@ -261,6 +284,34 @@ class Handler(BaseHTTPRequestHandler):
             return
         if path == "/api/scene/reset":
             self._json(SCENE.reset())
+            return
+        if path == "/api/interaction/endpoints":
+            try:
+                self._json(INTERACTION.register_endpoint(body))
+            except (ValueError, KeyError) as exc:
+                self._json({"ok": False, "error": str(exc)}, status=400)
+            return
+        if path == "/api/interaction/heartbeat":
+            try:
+                self._json(INTERACTION.heartbeat(str(body.get("endpoint_id", ""))))
+            except KeyError as exc:
+                self._json({"ok": False, "error": str(exc)}, status=404)
+            return
+        if path == "/api/interaction/input":
+            try:
+                self._json(INTERACTION.handle_input(body))
+            except KeyError as exc:
+                self._json({"ok": False, "error": str(exc)}, status=404)
+            except ValueError as exc:
+                self._json({"ok": False, "error": str(exc)}, status=400)
+            return
+        if path == "/api/interaction/handoff":
+            try:
+                self._json(INTERACTION.handoff(body))
+            except KeyError as exc:
+                self._json({"ok": False, "error": str(exc)}, status=404)
+            except ValueError as exc:
+                self._json({"ok": False, "error": str(exc)}, status=400)
             return
         if path in ("/api/access/call", "/api/northbound/call"):
             try:
@@ -412,6 +463,7 @@ def serve(
         print("\nstopped", flush=True)
     finally:
         server.server_close()
+        INTERACTION.close()
         RUNTIME.close()
 
 

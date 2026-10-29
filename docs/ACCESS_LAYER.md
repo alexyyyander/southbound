@@ -275,6 +275,8 @@ HA 适配器的实时状态事件在 adapter 配置中开启：
 | `iot_commission` | 受控接入新设备（默认需要 confirm） |
 | `iot_decommission` | 移除已接入设备（默认需要 confirm） |
 | `lan_graph` | 持久化 LAN 图、身份、控制范围与缓存状态（可传 device_id） |
+| `interaction_endpoints` | 多硬件交互端点与模态 |
+| `interaction_input` | 通过端点发送一轮并路由输出 |
 
 `iot_call` 参数：
 

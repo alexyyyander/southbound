@@ -76,6 +76,10 @@ When remote mode is active, MCP tools use the HTTP runtime surface:
 - `GET /api/graph`
 - `GET /api/graph/devices/<device_id>`
 - `GET /api/state`
+- `GET /api/interaction/endpoints`
+- `GET /api/interaction/sessions`
+- `POST /api/interaction/input`
+- `POST /api/interaction/handoff`
 - `POST /api/northbound/intent`
 - `POST /api/northbound/call`
 - `POST /api/northbound/commission`
