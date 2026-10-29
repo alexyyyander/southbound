@@ -1,8 +1,13 @@
+import json
 import unittest
 from unittest.mock import patch
 
 from southbound.access.adapters.home_assistant import HomeAssistantAdapter
+from southbound.access.audit import AuditLog
 from southbound.access.capabilities import capability_for
+from southbound.access.hub import AccessHub
+from southbound.graph import LANGraph
+from southbound.runtime import SouthboundRuntime
 
 DEVICES = [
     {
@@ -94,6 +99,131 @@ class HomeAssistantAdapterTest(unittest.TestCase):
         request.assert_called_once_with("GET", "/api/states/light.living_room")
         self.assertEqual(result["state"], "on")
         self.assertEqual(result["attributes"]["brightness"], 120)
+
+    def test_websocket_url_and_event_status(self) -> None:
+        self.assertEqual(self.adapter.ws_url, "ws://ha.local:8123/api/websocket")
+        self.assertEqual(
+            self.adapter.event_status()["enabled"],
+            False,
+        )
+
+    def test_websocket_state_event_maps_to_device(self) -> None:
+        received = []
+        self.adapter.set_event_sink(
+            lambda device_id, event_type, data: received.append(
+                (device_id, event_type, data)
+            )
+        )
+        try:
+            handled = self.adapter._handle_ws_message(
+                {
+                    "type": "event",
+                    "event": {
+                        "event_type": "state_changed",
+                        "data": {
+                            "entity_id": "light.living_room",
+                            "new_state": {
+                                "state": "on",
+                                "attributes": {"brightness": 120},
+                                "last_changed": "2026-10-29T16:00:00+00:00",
+                            },
+                        },
+                    },
+                }
+            )
+        finally:
+            self.adapter.set_event_sink(None)
+        self.assertTrue(handled)
+        self.assertEqual(received[0][0], "ha:light.living_room")
+        self.assertEqual(received[0][1], "state")
+        self.assertEqual(received[0][2]["state"], "on")
+        self.assertEqual(received[0][2]["attributes"]["brightness"], 120)
+
+    def test_websocket_event_updates_graph_state(self) -> None:
+        graph = LANGraph()
+        self.addCleanup(graph.close)
+        hub = AccessHub([self.adapter], audit=AuditLog())
+        runtime = SouthboundRuntime(hub=hub, graph=graph)
+        try:
+            self.adapter._handle_ws_message(
+                {
+                    "type": "event",
+                    "event": {
+                        "event_type": "state_changed",
+                        "data": {
+                            "entity_id": "light.living_room",
+                            "new_state": {"state": "off", "attributes": {}},
+                        },
+                    },
+                }
+            )
+            device = graph.describe("ha:light.living_room")
+            self.assertEqual(device["state"]["state"], "off")
+        finally:
+            runtime.close()
+
+    def test_websocket_auth_and_subscribe_handshake(self) -> None:
+        class FakeSocket:
+            def __init__(self) -> None:
+                self.incoming = [
+                    json.dumps({"type": "auth_required"}),
+                    json.dumps({"type": "auth_ok"}),
+                    json.dumps(
+                        {
+                            "type": "event",
+                            "event": {
+                                "event_type": "state_changed",
+                                "data": {
+                                    "entity_id": "light.living_room",
+                                    "new_state": {"state": "on", "attributes": {}},
+                                },
+                            },
+                        }
+                    ),
+                ]
+                self.sent = []
+
+            def recv(self):
+                if not self.incoming:
+                    raise StopIteration
+                return self.incoming.pop(0)
+
+            def send(self, payload) -> None:
+                self.sent.append(json.loads(payload))
+
+            def close(self) -> None:
+                pass
+
+        fake_socket = FakeSocket()
+        fake_websocket = type(
+            "FakeWebSocketModule",
+            (),
+            {"create_connection": staticmethod(lambda *_args, **_kwargs: fake_socket)},
+        )
+        received = []
+        self.adapter.set_event_sink(
+            lambda device_id, event_type, data: received.append(
+                (device_id, event_type, data)
+            )
+        )
+        try:
+            with patch(
+                "southbound.access.adapters.home_assistant.websocket",
+                fake_websocket,
+            ):
+                with self.assertRaises(StopIteration):
+                    self.adapter._run_event_socket()
+        finally:
+            self.adapter.set_event_sink(None)
+        self.assertEqual(
+            fake_socket.sent[0],
+            {"type": "auth", "access_token": "test-token"},
+        )
+        self.assertEqual(
+            fake_socket.sent[1],
+            {"id": 1, "type": "subscribe_events", "event_type": "state_changed"},
+        )
+        self.assertEqual(received[0][0], "ha:light.living_room")
 
 
 if __name__ == "__main__":

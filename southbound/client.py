@@ -7,7 +7,7 @@ lets the MCP adapter and CLI talk to it without creating a second
 
 The client deliberately exposes only the public runtime surface used by MCP
 and CLI: status, devices, describe, catalog, intent, call, commission,
-decommission, recent events, and the simulator controls.
+decommission, recent events, graph snapshots, and the simulator controls.
 """
 
 from __future__ import annotations
@@ -109,6 +109,17 @@ class RemoteRuntime:
     def catalog(self) -> list[dict[str, Any]]:
         payload = self._request("GET", "/api/northbound/catalog")
         return list(payload.get("tools") or [])
+
+    def graph(self) -> dict[str, Any]:
+        return self._request("GET", "/api/graph")
+
+    def graph_snapshot(self) -> dict[str, Any]:
+        """Compatibility alias for the local runtime surface."""
+        return self.graph()
+
+    def graph_device(self, device_id: str) -> dict[str, Any]:
+        encoded = urllib.parse.quote(device_id, safe="")
+        return self._request("GET", f"/api/graph/devices/{encoded}")
 
     def intent(self, goal: str) -> dict[str, Any]:
         return self._request("POST", "/api/northbound/intent", {"goal": goal})

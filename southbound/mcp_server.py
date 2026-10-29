@@ -24,6 +24,7 @@ Tools:
     iot_call         policy-checked, audited device action
     iot_commission   controlled onboarding with explicit confirmation
     iot_decommission remove a commissioned device
+    lan_graph        persistent LAN graph, identities, and cached state
 """
 
 from __future__ import annotations
@@ -43,18 +44,31 @@ from .access.errors import AccessError
 from .client import RemoteRuntime
 from .deep_scan import DEFAULT_OUT as DEEP_OUT
 from .discover import DEFAULT_OUT, discover, print_inventory
+from .event_store import EventStore
+from .graph import LANGraph
 from .paths import DATA_DIR
-from .runtime import SouthboundRuntime
+from .runtime import EventBus, SouthboundRuntime
 
 REMOTE_ENV = "SOUTHBOUND_REMOTE_URL"
 REMOTE_TOKEN_ENV = "SOUTHBOUND_REMOTE_TOKEN"
+
+
+def _local_runtime() -> SouthboundRuntime:
+    state_db = DATA_DIR / "lan_state.sqlite3"
+    runtime = SouthboundRuntime(
+        store=CommissionStore(DATA_DIR / "commissioned.json"),
+        graph=LANGraph(state_db),
+        events=EventBus(store=EventStore(state_db)),
+    )
+    runtime.ingest_lan_files(DATA_DIR)
+    return runtime
 
 
 def _make_runtime() -> SouthboundRuntime | RemoteRuntime:
     remote = os.environ.get(REMOTE_ENV)
     if remote:
         return RemoteRuntime(remote, token=os.environ.get(REMOTE_TOKEN_ENV, ""))
-    return SouthboundRuntime(store=CommissionStore(DATA_DIR / "commissioned.json"))
+    return _local_runtime()
 
 
 def configure(remote: str | None = None, token: str | None = None) -> None:
@@ -69,9 +83,7 @@ def configure(remote: str | None = None, token: str | None = None) -> None:
         SIM = None
         HUB = None
     else:
-        RUNTIME = SouthboundRuntime(
-            store=CommissionStore(DATA_DIR / "commissioned.json")
-        )
+        RUNTIME = _local_runtime()
         SIM = RUNTIME.simulator
         HUB = RUNTIME.hub
     previous.close()
@@ -162,6 +174,23 @@ TOOLS = [
                     "items": {"type": "integer"},
                     "description": "Optional explicit port list.",
                 },
+            },
+            "additionalProperties": False,
+        },
+    },
+    {
+        "name": "lan_graph",
+        "description": (
+            "Return the durable LAN graph: merged identities, control scope, "
+            "authorization, capabilities, cached state, and last-seen times."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "device_id": {
+                    "type": "string",
+                    "description": "Optional graph device id; omit for the whole graph.",
+                }
             },
             "additionalProperties": False,
         },
@@ -422,6 +451,18 @@ def _tool_sim_devices(_arguments: dict) -> dict:
     return _text_result(json.dumps(payload, ensure_ascii=False, indent=2))
 
 
+def _tool_lan_graph(arguments: dict) -> dict:
+    device_id = str(arguments.get("device_id") or "").strip()
+    if device_id:
+        device = RUNTIME.graph_device(device_id)
+        if device is None:
+            return _text_result(f"unknown graph device: {device_id}", is_error=True)
+        payload = device
+    else:
+        payload = RUNTIME.graph_snapshot()
+    return _text_result(json.dumps(payload, ensure_ascii=False, indent=2))
+
+
 def _tool_sim_action(arguments: dict) -> dict:
     device_id = str(arguments.get("device_id", ""))
     action = str(arguments.get("action", ""))
@@ -542,6 +583,7 @@ HANDLERS = {
     "signal_paths": _tool_signal_paths,
     "integration_plan": _tool_integration_plan,
     "deep_scan_lan": _tool_deep_scan,
+    "lan_graph": _tool_lan_graph,
     "sim_devices": _tool_sim_devices,
     "sim_action": _tool_sim_action,
     "sim_goal": _tool_sim_goal,

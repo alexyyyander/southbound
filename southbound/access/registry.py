@@ -27,7 +27,11 @@ class AdapterSpec:
     default_enabled: bool = False
 
     def snapshot(self) -> dict:
-        return {"name": self.name, "kinds": list(self.kinds), "fields": list(self.fields)}
+        return {
+            "name": self.name,
+            "kinds": list(self.kinds),
+            "fields": list(self.fields),
+        }
 
 
 class AdapterRegistry:
@@ -45,7 +49,9 @@ class AdapterRegistry:
     def catalog(self) -> list[dict]:
         return [spec.snapshot() for spec in self._specs.values()]
 
-    def build(self, config: dict, simulator: Simulator | None = None) -> list[DeviceAdapter]:
+    def build(
+        self, config: dict, simulator: Simulator | None = None
+    ) -> list[DeviceAdapter]:
         unknown = set(config) - set(self._specs)
         if unknown:
             raise ValueError(f"unknown adapters: {', '.join(sorted(unknown))}")
@@ -63,9 +69,13 @@ class AdapterRegistry:
 def _ha(config: dict, _simulator: Simulator | None) -> DeviceAdapter:
     return HomeAssistantAdapter(
         base_url=str(config.get("base_url", "")),
-        token=os.environ.get(str(config.get("token_env", "HA_TOKEN")), config.get("token", "")),
+        token=os.environ.get(
+            str(config.get("token_env", "HA_TOKEN")), config.get("token", "")
+        ),
         devices=config.get("devices") or [],
         timeout=float(config.get("timeout", 4)),
+        subscribe_events=bool(config.get("events", False)),
+        ws_url=str(config.get("ws_url", "")),
     )
 
 
@@ -100,17 +110,25 @@ def _nfc(config: dict, _simulator: Simulator | None) -> DeviceAdapter:
 REGISTRY = AdapterRegistry()
 _HOME_KINDS = tuple(k for k in CAPABILITIES if k not in ("ble_device", "nfc_reader"))
 REGISTRY.register(
-    AdapterSpec("sim", lambda c, s: SimAdapter(s or Simulator()), _HOME_KINDS, ("state",), True)
+    AdapterSpec(
+        "sim", lambda c, s: SimAdapter(s or Simulator()), _HOME_KINDS, ("state",), True
+    )
 )
 REGISTRY.register(AdapterSpec("home_assistant", _ha, _HOME_KINDS, ("entity_id",)))
 REGISTRY.register(
     AdapterSpec(
-        "zigbee2mqtt", lambda c, s: _mqtt(Zigbee2MqttAdapter, c), _HOME_KINDS, ("friendly_name",)
+        "zigbee2mqtt",
+        lambda c, s: _mqtt(Zigbee2MqttAdapter, c),
+        _HOME_KINDS,
+        ("friendly_name",),
     )
 )
 REGISTRY.register(
     AdapterSpec(
-        "mqtt", lambda c, s: _mqtt(MqttAdapter, c), _HOME_KINDS, ("command_topic", "state_topic")
+        "mqtt",
+        lambda c, s: _mqtt(MqttAdapter, c),
+        _HOME_KINDS,
+        ("command_topic", "state_topic"),
     )
 )
 REGISTRY.register(AdapterSpec("ble", _ble, ("ble_device",), ("connection",)))

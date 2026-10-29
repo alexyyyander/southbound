@@ -6,6 +6,24 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- **Durable LAN graph**: SQLite-backed device identities, control scope,
+  authorization, provenance, capabilities, cached state, and last-seen times.
+  Inventory, deep scan, commissioning records, and adapter bindings merge into
+  one logical device; authorized bindings keep their canonical `device_id`.
+- `GET /api/graph`, `GET /api/graph/devices/<device_id>`, and `GET /api/state`
+  plus `RemoteRuntime.graph()` / `graph_device()`.
+- `southbound graph [--json] [--device ID]` CLI and the `lan_graph` MCP tool.
+- **Durable event log**: event ids continue across restarts and
+  `/api/events/recent?since=` can replay persisted events.
+- **Home Assistant WebSocket events**: optional `websocket-client` support for
+  `state_changed` events, with auth/subscribe handshake, reconnect backoff,
+  ping/pong, adapter event status, and the same EventBus/graph path as MQTT
+  and BLE/NFC events.
+- Tests for graph identity merging, persistence, runtime state projection,
+  event replay, and HA WebSocket handshake/state mapping (103 tests total).
+
 ## [0.11.0] - 2026-10-27
 
 ### Added

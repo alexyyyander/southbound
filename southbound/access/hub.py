@@ -44,31 +44,47 @@ class AccessHub:
         self.refresh()
         for name, adapter in self.adapters.items():
             adapter.set_event_sink(
-                lambda device_id, event_type, data, name=name:
-                self._device_event(name, device_id, event_type, data)
+                lambda device_id, event_type, data, name=name: self._device_event(
+                    name, device_id, event_type, data
+                )
             )
 
     def set_event_sink(self, sink: Callable[[dict], None] | None) -> None:
         with self._event_lock:
             self._event_sink = sink
 
-    def _device_event(self, adapter: str, device_id: str, event_type: str, data: dict) -> None:
+    def _device_event(
+        self, adapter: str, device_id: str, event_type: str, data: dict
+    ) -> None:
         with self._event_lock:
             binding = self._bindings.get(device_id)
             if self._closed or binding is None or binding.adapter != adapter:
                 return
-            if event_type not in ("state", "notification", "tag", "connection", "error"):
+            if event_type not in (
+                "state",
+                "notification",
+                "tag",
+                "connection",
+                "error",
+            ):
                 raise ValueError(f"unknown device event: {event_type}")
             # Copy JSON data so a driver's later mutation cannot alter event history.
             payload = json.loads(json.dumps(data, allow_nan=False))
             if self._event_sink:
-                self._event_sink({
-                    "type": f"device.{event_type}", "plane": "northbound",
-                    "direction": "up", "source": "device", "adapter": adapter,
-                    "device_id": device_id, "name": binding.name,
-                    "ok": event_type != "error", "data": payload,
-                    "simulated": bool(binding.metadata.get("simulated", False)),
-                })
+                self._event_sink(
+                    {
+                        "type": f"device.{event_type}",
+                        "plane": "northbound",
+                        "direction": "up",
+                        "source": "device",
+                        "adapter": adapter,
+                        "device_id": device_id,
+                        "name": binding.name,
+                        "ok": event_type != "error",
+                        "data": payload,
+                        "simulated": bool(binding.metadata.get("simulated", False)),
+                    }
+                )
 
     def close(self) -> None:
         with self._event_lock:
@@ -79,8 +95,14 @@ class AccessHub:
             try:
                 adapter.close()
             except Exception as exc:
-                self.audit.record({"type": "adapter.close", "adapter": adapter.name,
-                                   "ok": False, "error": str(exc)})
+                self.audit.record(
+                    {
+                        "type": "adapter.close",
+                        "adapter": adapter.name,
+                        "ok": False,
+                        "error": str(exc),
+                    }
+                )
 
     def refresh(self) -> None:
         bindings: dict[str, DeviceBinding] = {}
@@ -229,6 +251,11 @@ class AccessHub:
                     "name": adapter.name,
                     "available": adapter.available(),
                     "devices": counts.get(adapter.name, 0),
+                    "events": (
+                        adapter.event_status()
+                        if callable(getattr(adapter, "event_status", None))
+                        else None
+                    ),
                 }
                 for adapter in self.adapters.values()
             ],

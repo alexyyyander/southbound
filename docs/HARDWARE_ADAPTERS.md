@@ -119,7 +119,7 @@ MCP `iot_commission` 和 HTTP `/api/northbound/commission` 使用相同的 `conn
 
 ## 设备主动上报
 
-驱动调用 `emit(device_id, event_type, data)`，由 AccessHub 验证设备归属，再送入 EventBus。驱动不能通过 payload 覆盖来源、设备 ID、事件类型或模拟标记。已撤销设备和运行时关闭后的事件被丢弃。
+驱动调用 `emit(device_id, event_type, data)`，由 AccessHub 验证设备归属，再送入 EventBus。驱动不能通过 payload 覆盖来源、设备 ID、事件类型或模拟标记。已撤销设备和运行时关闭后的事件被丢弃。Home Assistant 的 WebSocket `state_changed` 事件也走同一条 `emit` 路径。
 
 事件类型为 `device.state`、`device.notification`、`device.tag`、`device.connection`、`device.error`。现有命令返回事件 `state` 保持兼容。
 
@@ -137,7 +137,7 @@ MCP `iot_commission` 和 HTTP `/api/northbound/commission` 使用相同的 `conn
 }
 ```
 
-通过现有 `/api/events` SSE 或 `/api/events/recent` 查看事件；Python 可用 `runtime.subscribe()`。事件是有界内存流，不是持久化消息队列，也不保证慢消费者不丢事件。工具操作继续写入原有审计日志。标签内容和通知数据仅作为设备数据，不会自动当作 Agent 指令执行。
+通过现有 `/api/events` SSE 或 `/api/events/recent` 查看事件；Python 可用 `runtime.subscribe()`。事件进入持久事件日志，支持按 id 重放；慢消费者仍可能丢弃实时 SSE 队列中的事件。工具操作继续写入原有审计日志。标签内容和通知数据仅作为设备数据，不会自动当作 Agent 指令执行。
 
 ## 验证与后续验收
 
@@ -147,7 +147,7 @@ python3 -m examples.hardware_demo
 ruff check .
 ```
 
-测试覆盖注册与配置、CLI/MCP 接口、模拟读写和事件、策略/审计、接入恢复与撤销、MQTT 事件、Bleak/nfcpy 库边界、超时、断连后重连、监听关闭和资源释放。库边界测试仍然使用替身，不能替代硬件兼容性测试。
+测试覆盖注册与配置、CLI/MCP 接口、模拟读写和事件、策略/审计、接入恢复与撤销、MQTT 事件、HA WebSocket 握手与状态事件、Bleak/nfcpy 库边界、超时、断连后重连、监听关闭和资源释放。库边界测试仍然使用替身，不能替代硬件兼容性测试。
 
 硬件到位后需验证：OS 权限与配对、实际 GATT 服务/字节编码、通知与断连、读卡器兼容性、标签容量/移开重刷、失败写入后的回读。
 

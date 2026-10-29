@@ -34,12 +34,20 @@ from urllib.parse import parse_qs, unquote, urlparse
 
 from .access.commissioning import CommissionStore
 from .access.errors import AccessError
+from .event_store import EventStore
+from .graph import LANGraph
 from .paths import DATA_DIR, WEB_DIR
-from .runtime import SouthboundRuntime
+from .runtime import EventBus, SouthboundRuntime
 from .scene import SceneController
 from .service_auth import is_authorized
 
-RUNTIME = SouthboundRuntime(store=CommissionStore(DATA_DIR / "commissioned.json"))
+STATE_DB = DATA_DIR / "lan_state.sqlite3"
+GRAPH = LANGraph(STATE_DB)
+RUNTIME = SouthboundRuntime(
+    store=CommissionStore(DATA_DIR / "commissioned.json"),
+    graph=GRAPH,
+    events=EventBus(store=EventStore(STATE_DB)),
+)
 SIM = RUNTIME.simulator
 HUB = RUNTIME.hub
 SCENE = SceneController(RUNTIME)
@@ -53,6 +61,9 @@ def _load_json(name: str) -> dict:
         return json.loads(path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError):
         return {}
+
+
+RUNTIME.ingest_lan(_load_json("inventory.json"), _load_json("deep_scan.json"))
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -101,6 +112,35 @@ class Handler(BaseHTTPRequestHandler):
             return
         if path == "/api/deep_scan":
             self._json(_load_json("deep_scan.json"))
+            return
+        if path == "/api/graph":
+            self._json(RUNTIME.graph_snapshot())
+            return
+        if path == "/api/state":
+            snapshot = RUNTIME.graph_snapshot()
+            self._json(
+                {
+                    "generated_at": snapshot.get("generated_at"),
+                    "devices": [
+                        {
+                            "device_id": device["device_id"],
+                            "name": device["name"],
+                            "room": device["room"],
+                            "state": device["state"],
+                            "last_seen": device["last_seen"],
+                        }
+                        for device in snapshot.get("devices", [])
+                    ],
+                }
+            )
+            return
+        if path.startswith("/api/graph/devices/"):
+            device_id = unquote(path[len("/api/graph/devices/") :]).strip("/")
+            device = RUNTIME.graph_describe(device_id)
+            if device is None:
+                self._json({"error": "unknown graph device"}, status=404)
+            else:
+                self._json(device)
             return
         if path == "/api/sim/devices":
             self._json({"devices": SIM.list_devices(), "summary": SIM.summary()})
