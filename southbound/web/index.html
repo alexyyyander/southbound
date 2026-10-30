@@ -40,6 +40,7 @@
       <section class="panel topology-panel" id="topology" aria-labelledby="topology-title">
         <div class="panel__head"><div><p class="eyebrow">CONNECTION MAP</p><h2 id="topology-title">调用拓扑</h2><p>协议、策略与设备之间的真实绑定关系。</p></div><div class="segmented" id="topology-scope" role="group" aria-label="显示的适配器"><button type="button" data-scope="all" aria-pressed="true">全部协议</button><button type="button" data-scope="enabled" aria-pressed="false">仅已启用</button></div></div>
         <div class="topology-stages" aria-hidden="true"><span>01 <b>调用入口</b></span><span>02 <b>运行时</b></span><span>03 <b>协议适配器</b></span><span>04 <b>设备绑定</b></span></div>
+        <p class="topology-scroll-hint">左右滑动，查看协议与设备 →</p>
         <div class="topology" tabindex="0" aria-label="逻辑调用拓扑，可横向滚动查看">
           <svg id="topology-svg" viewBox="0 0 1120 460" role="group" aria-label="Agent 经策略与协议适配器调用设备的逻辑拓扑">
             <defs><marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="context-stroke"/></marker></defs>
@@ -62,9 +63,10 @@
         </div>
         <form id="agent-form" class="agent__form">
           <label class="visually-hidden" for="agent-input">目标</label>
-          <input id="agent-input" type="text" placeholder="例如：打开客厅灯并关掉书房插座" autocomplete="off">
+          <textarea id="agent-input" rows="2" placeholder="例如：打开客厅灯并关掉书房插座" aria-describedby="composer-hint"></textarea>
           <button id="agent-run" type="button">执行</button>
         </form>
+        <p id="composer-hint" class="composer-hint">Enter 执行 · Shift + Enter 换行 · 中文选词不会触发调用</p>
         <div id="suggestions" class="suggestions" aria-label="示例目标"></div>
         <div id="agent-trace" class="trace" aria-live="polite">
           <p class="trace__empty">还没有执行目标。先试试“家里状态”。</p>
