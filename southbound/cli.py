@@ -28,6 +28,7 @@ from .access.errors import AccessError
 from .client import RemoteRuntime
 from .event_store import EventStore
 from .graph import LANGraph
+from .interaction import InteractionService, InteractionStore
 from .paths import DATA_DIR
 from .runtime import EventBus, SouthboundRuntime
 
@@ -242,6 +243,79 @@ def cmd_graph(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_interact(args: argparse.Namespace) -> int:
+    runtime = _runtime()
+    endpoint_id = args.endpoint
+    request = {
+        "text": " ".join(args.text).strip(),
+        "session_id": args.session,
+        "execute": not args.no_execute,
+    }
+    if args.output:
+        request["output_endpoints"] = args.output
+    if not hasattr(runtime, "events"):
+        try:
+            if not endpoint_id and args.session:
+                endpoint_id = runtime.interaction_session(args.session)[
+                    "input_endpoint"
+                ]
+            request["endpoint_id"] = endpoint_id or "mac-dashboard"
+            result = runtime.interaction_input(request)
+        except (AccessError, KeyError, ValueError) as exc:
+            print(f"interaction error: {exc}", file=sys.stderr)
+            return 1
+        print(json.dumps(result, ensure_ascii=False, indent=2))
+        return 0 if result.get("ok", True) else 1
+    service = InteractionService(
+        runtime,
+        InteractionStore(DATA_DIR / "interaction.sqlite3"),
+        seed_simulated=True,
+        owner_token=os.environ.get("SOUTHBOUND_INTERACTION_OWNER_TOKEN", ""),
+    )
+    try:
+        if not endpoint_id and args.session:
+            session = service.session(args.session)
+            if session is not None:
+                endpoint_id = session["input_endpoint"]
+        request["endpoint_id"] = endpoint_id or "mac-dashboard"
+        result = service.handle_input(request)
+    except (AccessError, KeyError, ValueError) as exc:
+        print(f"interaction error: {exc}", file=sys.stderr)
+        return 1
+    finally:
+        service.close()
+    print(json.dumps(result, ensure_ascii=False, indent=2))
+    return 0 if result.get("ok", True) else 1
+
+
+def cmd_handoff(args: argparse.Namespace) -> int:
+    runtime = _runtime()
+    try:
+        if not hasattr(runtime, "events"):
+            result = runtime.interaction_handoff(args.session_id, args.endpoint_id)
+        else:
+            service = InteractionService(
+                runtime,
+                InteractionStore(DATA_DIR / "interaction.sqlite3"),
+                seed_simulated=True,
+                owner_token=os.environ.get("SOUTHBOUND_INTERACTION_OWNER_TOKEN", ""),
+            )
+            try:
+                result = service.handoff(
+                    {
+                        "session_id": args.session_id,
+                        "endpoint_id": args.endpoint_id,
+                    }
+                )
+            finally:
+                service.close()
+    except (AccessError, KeyError, ValueError) as exc:
+        print(f"handoff error: {exc}", file=sys.stderr)
+        return 1
+    print(json.dumps(result, ensure_ascii=False, indent=2))
+    return 0 if result.get("ok", True) else 1
+
+
 def cmd_onboard(args: argparse.Namespace) -> int:
     runtime = _runtime()
     request = {
@@ -337,6 +411,8 @@ def cmd_info(_args: argparse.Namespace) -> int:
     print("  decommission 移除已接入设备（需 --confirm）")
     print("  access    适配器、策略、审计与事件状态")
     print("  graph     持久化 LAN 设备图与跨协议身份")
+    print("  interact  多硬件会话：输入、输出路由与 handoff")
+    print("  handoff   切换 session 的输入端点")
     print("  demo      可视化面板（serve 的别名）")
     print("  mcp       stdio MCP server")
     print(
@@ -456,6 +532,21 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--device", default="", help="show one graph device by id")
     p.add_argument("--json", action="store_true")
     p.set_defaults(func=cmd_graph)
+
+    p = sub.add_parser(
+        "interact", help="send one text turn through an interaction endpoint"
+    )
+    p.add_argument("text", nargs="*")
+    p.add_argument("--endpoint", default="")
+    p.add_argument("--session", default="")
+    p.add_argument("--output", action="append", default=[], help="output endpoint id")
+    p.add_argument("--no-execute", action="store_true")
+    p.set_defaults(func=cmd_interact)
+
+    p = sub.add_parser("handoff", help="switch a session's input endpoint")
+    p.add_argument("session_id")
+    p.add_argument("endpoint_id")
+    p.set_defaults(func=cmd_handoff)
 
     p = sub.add_parser(
         "onboard", help="commission a device with explicit authorization"

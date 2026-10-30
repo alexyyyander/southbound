@@ -25,6 +25,8 @@ Tools:
     iot_commission   controlled onboarding with explicit confirmation
     iot_decommission remove a commissioned device
     lan_graph        persistent LAN graph, identities, and cached state
+    interaction_endpoints  list interaction endpoints and modalities
+    interaction_input      send a turn through an endpoint/session
 """
 
 from __future__ import annotations
@@ -46,6 +48,7 @@ from .deep_scan import DEFAULT_OUT as DEEP_OUT
 from .discover import DEFAULT_OUT, discover, print_inventory
 from .event_store import EventStore
 from .graph import LANGraph
+from .interaction import InteractionService, InteractionStore
 from .paths import DATA_DIR
 from .runtime import EventBus, SouthboundRuntime
 
@@ -192,6 +195,51 @@ TOOLS = [
                     "description": "Optional graph device id; omit for the whole graph.",
                 }
             },
+            "additionalProperties": False,
+        },
+    },
+    {
+        "name": "interaction_endpoints",
+        "description": (
+            "List the multi-hardware interaction endpoints: input/output "
+            "modalities, location, trust, and capabilities."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "properties": {},
+            "additionalProperties": False,
+        },
+    },
+    {
+        "name": "interaction_input",
+        "description": (
+            "Send one text turn through an interaction endpoint. The session "
+            "modality router sends the response to zero or more output endpoints."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "endpoint_id": {
+                    "type": "string",
+                    "description": "Interaction endpoint receiving the input.",
+                },
+                "text": {"type": "string"},
+                "session_id": {
+                    "type": "string",
+                    "description": "Existing session id; omit to create one.",
+                },
+                "output_endpoints": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "Optional explicit output endpoint ids.",
+                },
+                "execute": {
+                    "type": "boolean",
+                    "description": "Execute device intent through AccessHub; default true.",
+                    "default": True,
+                },
+            },
+            "required": ["endpoint_id", "text"],
             "additionalProperties": False,
         },
     },
@@ -463,6 +511,62 @@ def _tool_lan_graph(arguments: dict) -> dict:
     return _text_result(json.dumps(payload, ensure_ascii=False, indent=2))
 
 
+def _local_interaction() -> InteractionService | None:
+    if not hasattr(RUNTIME, "events"):
+        return None
+    return InteractionService(
+        RUNTIME,
+        InteractionStore(DATA_DIR / "interaction.sqlite3"),
+        seed_simulated=True,
+        owner_token=os.environ.get("SOUTHBOUND_INTERACTION_OWNER_TOKEN", ""),
+    )
+
+
+def _tool_interaction_endpoints(_arguments: dict) -> dict:
+    if hasattr(RUNTIME, "interaction_endpoints"):
+        endpoints = RUNTIME.interaction_endpoints()
+    else:
+        service = _local_interaction()
+        if service is None:
+            return _text_result("interaction runtime unavailable", is_error=True)
+        try:
+            endpoints = service.endpoints()
+        finally:
+            service.close()
+    return _text_result(
+        json.dumps({"endpoints": endpoints}, ensure_ascii=False, indent=2)
+    )
+
+
+def _tool_interaction_input(arguments: dict) -> dict:
+    payload = {
+        "endpoint_id": str(arguments.get("endpoint_id") or ""),
+        "text": str(arguments.get("text") or ""),
+        "session_id": str(arguments.get("session_id") or ""),
+    }
+    if "execute" in arguments:
+        payload["execute"] = arguments.get("execute")
+    if "output_endpoints" in arguments:
+        payload["output_endpoints"] = arguments.get("output_endpoints") or []
+    try:
+        if hasattr(RUNTIME, "interaction_input"):
+            result = RUNTIME.interaction_input(payload)
+        else:
+            service = _local_interaction()
+            if service is None:
+                return _text_result("interaction runtime unavailable", is_error=True)
+            try:
+                result = service.handle_input(payload)
+            finally:
+                service.close()
+    except (AccessError, KeyError, ValueError) as exc:
+        return _text_result(str(exc), is_error=True)
+    return _text_result(
+        json.dumps(result, ensure_ascii=False, indent=2),
+        is_error=not bool(result.get("ok", True)),
+    )
+
+
 def _tool_sim_action(arguments: dict) -> dict:
     device_id = str(arguments.get("device_id", ""))
     action = str(arguments.get("action", ""))
@@ -584,6 +688,8 @@ HANDLERS = {
     "integration_plan": _tool_integration_plan,
     "deep_scan_lan": _tool_deep_scan,
     "lan_graph": _tool_lan_graph,
+    "interaction_endpoints": _tool_interaction_endpoints,
+    "interaction_input": _tool_interaction_input,
     "sim_devices": _tool_sim_devices,
     "sim_action": _tool_sim_action,
     "sim_goal": _tool_sim_goal,

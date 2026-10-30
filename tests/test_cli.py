@@ -33,6 +33,27 @@ class CliParserTest(unittest.TestCase):
         self.assertEqual(args.command, "graph")
         self.assertEqual(args.device, "mqtt:hall-lamp")
 
+    def test_interact_command(self) -> None:
+        args = build_parser().parse_args(
+            [
+                "interact",
+                "打开客厅灯",
+                "--endpoint",
+                "phone-owner",
+                "--output",
+                "pi-living",
+            ]
+        )
+        self.assertEqual(args.command, "interact")
+        self.assertEqual(args.endpoint, "phone-owner")
+        self.assertEqual(args.output, ["pi-living"])
+
+    def test_handoff_command(self) -> None:
+        args = build_parser().parse_args(["handoff", "s-1", "pi-living"])
+        self.assertEqual(args.command, "handoff")
+        self.assertEqual(args.session_id, "s-1")
+        self.assertEqual(args.endpoint_id, "pi-living")
+
     def test_survey_command(self) -> None:
         args = build_parser().parse_args(["survey", "--no-ports", "--ble", "--no-wifi"])
         self.assertEqual(args.command, "survey")

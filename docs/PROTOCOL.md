@@ -37,6 +37,13 @@ Wi-Fi / Zigbee / Matter / ESPHome / MQTT
 | GET | `/api/graph` | 持久化 LAN 图：身份、控制范围、状态、来源 |
 | GET | `/api/graph/devices/<device_id>` | 单个 LAN 图设备，支持 device_id 别名 |
 | GET | `/api/state` | LAN 图中所有设备的最新缓存状态 |
+| GET | `/api/interaction/endpoints` | 多硬件交互端点与模态 |
+| POST | `/api/interaction/endpoints` | 注册交互端点（默认 unverified） |
+| POST | `/api/interaction/heartbeat` | 更新端点最后在线时间 |
+| GET | `/api/interaction/sessions` | 会话列表 |
+| GET | `/api/interaction/sessions/<id>` | 单个会话 |
+| POST | `/api/interaction/input` | 端点输入、intent 执行、模态路由 |
+| POST | `/api/interaction/handoff` | 将会话输入切换到另一端点 |
 | GET | `/api/sim/devices` | 虚拟端点状态 |
 | POST | `/api/sim/devices/<id>/action` | 模拟端点动作 |
 | POST | `/api/sim/reset` | 重置模拟器 |
@@ -45,7 +52,7 @@ Wi-Fi / Zigbee / Matter / ESPHome / MQTT
 | POST | `/api/scene/automation` | 开/关场景自动模式 |
 | POST | `/api/scene/reset` | 重置房间与模拟器 |
 
-`/api/access/*`、`/api/agent` 是兼容别名。所有响应都是 JSON；SSE 使用 `text/event-stream`。LAN 图与事件日志持久化在 `data/lan_state.sqlite3`，事件 id 跨重启继续递增。
+`/api/access/*`、`/api/agent` 是兼容别名。所有响应都是 JSON；SSE 使用 `text/event-stream`。LAN 图与事件日志持久化在 `data/lan_state.sqlite3`，事件 id 跨重启继续递增。交互端点提升为 owner 需要 `confirm=true` 且 `owner_token` 匹配服务端 `SOUTHBOUND_INTERACTION_OWNER_TOKEN`。
 
 `SouthboundRuntime` 默认嵌入进程；`southbound serve` 作为共享 runtime 时，MCP/CLI 通过 `SOUTHBOUND_REMOTE_URL` 使用同一组 HTTP 端点。见 [共享 Runtime Service](RUNTIME_SERVICE.md)。
 
@@ -210,6 +217,11 @@ data: {"id":12,"ts":"2026-10-26T17:00:00+08:00","type":"command","plane":"southb
 | `command` | southbound | Southbound → adapter/设备 |
 | `state` | northbound | 设备状态回读 |
 | `device.state` / `device.notification` / `device.tag` / `device.connection` / `device.error` | northbound | 设备主动上报；HA `state_changed`、MQTT、BLE/NFC 共用此路径 |
+| `interaction.input` | northbound | 交互端点输入；携带 `ok/error` |
+| `interaction.output` | northbound | 按端点模态渲染的输出意图；携带 `ok/error` |
+| `interaction.session` | northbound | 会话活动端点更新；携带 `ok/error` |
+| `interaction.handoff` | northbound | 会话输入端点切换 |
+| `interaction.endpoint` | northbound | 端点注册 |
 | `commission.request` | northbound | 请求接入 |
 | `commission` | southbound | adapter 验证/绑定 |
 | `commission.result` | northbound | 接入完成，能力就绪 |
@@ -279,6 +291,7 @@ stdio MCP 工具：
 
 - 发现/深扫：`lan_inventory`、`device_details`、`signal_paths`、`integration_plan`、`deep_scan_lan`
 - LAN 图：`lan_graph`（可传 `device_id` 查看单个设备）
+- 交互端点：`interaction_endpoints`、`interaction_input`
 - 模拟器：`sim_devices`、`sim_action`、`sim_goal`
 - 接入层：`iot_hub_status`、`iot_devices_list`、`iot_device_describe`、`iot_tool_catalog`、`iot_call`
 - 受控接入：`iot_commission`、`iot_decommission`

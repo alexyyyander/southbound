@@ -62,10 +62,11 @@
 | **运行时与事件流** | SouthboundRuntime + EventBus + SSE；`serve` 可作为共享 runtime，MCP/CLI 通过 `SOUTHBOUND_REMOTE_URL` 连接 |
 | **LAN 设备图** | SQLite 持久化设备身份、能力、来源、控制范围与缓存状态；合并 inventory / deep scan / commissioning / access binding |
 | **共享 runtime** | 一个设备图、策略和审计供 Dashboard / MCP / CLI 共用；支持 `southbound mcp --remote` 与 Bearer token |
+| **多硬件交互** | `/interaction`：会话、模态路由、跨端输出与 handoff；端点注册通过 HTTP API；Mac/手机/Pi/ESP32/TV 模拟端点 |
 | **2.5D 房间实验** | `GET /scene`：可移动 avatar、presence 信号、点击设备、自动反射与回读验证 |
 | **Splat 预览** | `/scene` 内切换 WebGL 合成 splat：轨道旋转、设备热点、avatar 投影；同一控制层 |
 | **可视化** | 网络拓扑、设备清单、模拟端点、Agent 控制台、接入表单 |
-| **MCP** | 16 个工具：发现、深扫、LAN 图、模拟器、接入层、受控 onboarding |
+| **MCP** | 18 个工具：发现、深扫、LAN 图、交互端点、模拟器、接入层、受控 onboarding |
 | **无硬件闭环** | 六个虚拟端点 + 确定性 agent trace，没有设备也能跑 |
 
 BLE / NFC 的配置、事件入口与无硬件演示见 [硬件适配器说明](docs/HARDWARE_ADAPTERS.md)。
@@ -283,6 +284,8 @@ Southbound 的“扩散”是 **受控接入**，不是把 agent 代码复制到
 | `southbound decommission <device> --confirm` | 移除已接入设备 |
 | `southbound access` | 适配器、策略、审计与运行时状态 |
 | `southbound graph` | 查看持久化 LAN 设备图（`--json` / `--device`） |
+| `southbound interact "..."` | 通过交互端点发送一轮，支持 `--output`、`--session`、`--no-execute` |
+| `southbound handoff <session> <endpoint>` | 切换 session 的输入端点 |
 | `southbound mcp` | 启动 stdio MCP server；用 `--remote URL` 连接共享 runtime |
 | `southbound info` | 工具链地图 |
 
@@ -304,6 +307,7 @@ claude mcp add --scope project southbound -- python3 /path/to/southbound/mcp_ser
 |---|---|
 | 发现与方案 | `lan_inventory`、`device_details`、`signal_paths`、`integration_plan`、`deep_scan_lan` |
 | LAN 图 | `lan_graph` |
+| 交互端点 | `interaction_endpoints`、`interaction_input` |
 | 模拟器 | `sim_devices`、`sim_action`、`sim_goal` |
 | 接入层 | `iot_hub_status`、`iot_devices_list`、`iot_device_describe`、`iot_tool_catalog`、`iot_call` |
 | 受控 onboarding | `iot_commission`、`iot_decommission` |
@@ -335,6 +339,9 @@ SOUTHBOUND_REMOTE_URL=http://127.0.0.1:8765 python3 -m southbound.mcp_server
 - `GET /api/events`（SSE）
 - `GET /api/events/recent?since=<id>`
 - `GET /api/graph`、`GET /api/graph/devices/<device_id>`、`GET /api/state`
+- `GET /api/interaction/endpoints`、`GET /api/interaction/sessions`
+- `POST /api/interaction/endpoints`、`POST /api/interaction/heartbeat`
+- `POST /api/interaction/input`、`POST /api/interaction/handoff`
 - `GET /api/inventory`、`GET /api/deep_scan`、`GET /api/sim/devices`
 - `GET /api/scene/state`、`POST /api/scene/presence`、`POST /api/scene/automation`、`POST /api/scene/reset`
 - `POST /api/sim/devices/<id>/action`、`POST /api/sim/reset`
@@ -355,6 +362,7 @@ export HA_TOKEN="..."
 - MQTT 用户名/密码同样用环境变量；
 - 已授权设备记录写在 `data/commissioned.json`，不含 token/password；
 - LAN 设备图与事件日志写在 `data/lan_state.sqlite3`；
+- 交互端点 owner 审批使用 `SOUTHBOUND_INTERACTION_OWNER_TOKEN`，不会写入数据文件；
 - 数据文件都在 `data/`，默认不进入仓库。
 
 ## 仓库结构
@@ -366,6 +374,7 @@ southbound/
 │   ├── runtime.py           # SouthboundRuntime + EventBus + SSE
 │   ├── graph.py             # 持久化 LAN 设备图
 │   ├── event_store.py       # 持久事件日志
+│   ├── interaction.py       # 多硬件端点、会话与模态路由
 │   ├── scene.py             # 2.5D presence、低风险反射与验证
 │   ├── discover.py          # ARP / mDNS / SSDP
 │   ├── survey.py            # 跨平台 survey / readiness / 报告
@@ -389,12 +398,12 @@ southbound/
 │   │       ├── sim.py
 │   │       ├── home_assistant.py
 │   │       └── mqtt.py
-│   └── web/                 # 观测站面板 + scene.html / scene.js / splat.js
+│   └── web/                 # 观测站面板 + scene.html / interaction.html / splat.js
 ├── assets/                  # Logo、社交预览与品牌说明
 ├── config/access.example.json
 ├── deploy/systemd/          # Pi 常驻 harness 示例
 ├── docs/                    # About、架构、协议、演示、harness、接入层、onboarding、芯片、信号、硬件、扫描
-├── tests/                   # 103 项 unittest
+├── tests/                   # 128 项 unittest
 ├── data/                    # 本地生成，gitignored
 ├── viz_server.py            # 面板兼容入口
 ├── mcp_server.py            # MCP 兼容入口
@@ -421,7 +430,7 @@ make lint     # ruff check .
 make build    # wheel + sdist
 ```
 
-当前 103 项标准库测试覆盖分级规则、模拟器、agent 目标拆分、能力校验、策略、审计、工具目录、运行时/事件总线、持久化 LAN 图与事件日志、远程 runtime client/token、受控接入与持久化、2.5D 场景 presence/自动验证、survey 解析/readiness、HA 适配器映射、MQTT payload 和 CLI 解析，以及适配器注册、BLE/NFC 模拟读写、设备事件、驱动边界和资源释放。
+当前 128 项标准库测试覆盖分级规则、模拟器、agent 目标拆分、能力校验、策略、审计、工具目录、运行时/事件总线、持久化 LAN 图与事件日志、多硬件交互端点/会话/路由、远程 runtime client/token、受控接入与持久化、2.5D 场景 presence/自动验证、survey 解析/readiness、HA 适配器映射、MQTT payload 和 CLI 解析，以及适配器注册、BLE/NFC 模拟读写、设备事件、驱动边界和资源释放。
 
 CI 在 Python 3.10–3.13 上跑 ruff、单元测试和 wheel/sdist 构建。
 
@@ -435,6 +444,7 @@ CI 在 Python 3.10–3.13 上跑 ruff、单元测试和 wheel/sdist 构建。
 - [协议与 API](docs/PROTOCOL.md) — northbound/southbound、HTTP、事件与 MCP schema
 - [技术架构与可行性](docs/ARCHITECTURE.md)
 - [共享 Runtime Service](docs/RUNTIME_SERVICE.md) — 一个设备图供 Dashboard / MCP / CLI 共用
+- [多硬件交互](docs/INTERACTION.md) — 端点、会话、模态路由与跨端 handoff
 - [架构拆解图](docs/ARCHITECTURE_BREAKDOWN.md) — harness / MCP / core / adapters / devices 分层
 - [接入工具层](docs/ACCESS_LAYER.md)
 - [受控设备接入](docs/ONBOARDING.md)
@@ -457,19 +467,21 @@ CI 在 Python 3.10–3.13 上跑 ruff、单元测试和 wheel/sdist 构建。
 - 持久化 LAN 设备图：SQLite 身份合并、控制范围、来源和缓存状态；
 - 持久事件日志：事件 id 跨重启，`/api/events/recent` 可重放；
 - Home Assistant WebSocket 状态事件：可选 `websocket-client`，事件进入同一 EventBus；
+- 多硬件交互面：端点注册、会话、模态路由、跨端 handoff、`/interaction` 面板；
 - 远程 runtime client：`SOUTHBOUND_REMOTE_URL` / `southbound mcp --remote`；
 - 远程 runtime token 认证：loopback 免 token，非 loopback 需要 Bearer token；
 - 受控 onboarding / commissioning / 持久化 / 撤销；
 - 2.5D 房间实验：presence 信号、低风险自动反射、Agent notice、回读验证；
 - WebGL 合成 splat 预览：轨道相机、设备热点、avatar 投影；
 - 无主机 `survey`：Wi-Fi/BLE/radio 证据、服务指纹、Pi/Linux 支持、readiness 报告；
-- 16 个 MCP 工具；
-- 103 项测试、CI、wheel/sdist。
+- 18 个 MCP 工具；
+- 128 项测试、CI、wheel/sdist。
 
 **下一步**
 
 - 远程 runtime 的 TLS 与多用户身份（token 已实现；仍建议 loopback 或可信 LAN）；
 - 隔离区/审批 UI，从扫描结果一键预填 onboarding；
+- 真实交互端点：Pi/ESP32/手机客户端、音频流、离线降级与跨端 handoff；
 - Matter 原生 controller、ESPHome 原生 API；
 - 真实 ESP32/Matter/Zigbee/BLE/NFC 硬件验证；
 - **真实 3DGS 视觉层（可选）**：当前已有合成 splat 预览；真实照片级效果需要采集视频、COLMAP + nerfstudio/gsplat 训练，再把 `.splat` 资产接入同一 WebGL 层。2.5D 地图仍是设备锚点、碰撞、策略与审计的权威层；大文件放 `data/` 或 Git LFS，不提交真实家庭影像。

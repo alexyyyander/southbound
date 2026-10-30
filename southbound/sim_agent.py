@@ -150,8 +150,9 @@ def describe(device: dict) -> str:
     return f"{name}：{state}"
 
 
-def run_goal(goal: str, sim: DeviceRuntime) -> dict:
+def run_goal(goal: str, sim: DeviceRuntime, context: dict | None = None) -> dict:
     goal = (goal or "").strip()
+    context = context or {}
     steps: list[dict] = []
     affected: list[dict] = []
     errors: list[str] = []
@@ -210,7 +211,23 @@ def run_goal(goal: str, sim: DeviceRuntime) -> dict:
 
     for clause in clauses:
         kind = _kind_for(clause)
-        device = _find_device(sim, clause, kind)
+        device = None
+        if (
+            not kind
+            and not _room_for(clause)
+            and any(word in clause for word in ("它", "这个", "那个", "刚才", "再"))
+            and context.get("last_device_id")
+        ):
+            device = next(
+                (
+                    item
+                    for item in sim.list_devices()
+                    if item["id"] == context["last_device_id"]
+                ),
+                None,
+            )
+        if device is None:
+            device = _find_device(sim, clause, kind)
         if device is None:
             errors.append(f"没有找到与「{clause}」匹配的模拟设备")
             add_step(

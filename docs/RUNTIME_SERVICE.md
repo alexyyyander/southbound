@@ -76,6 +76,10 @@ When remote mode is active, MCP tools use the HTTP runtime surface:
 - `GET /api/graph`
 - `GET /api/graph/devices/<device_id>`
 - `GET /api/state`
+- `GET /api/interaction/endpoints`
+- `GET /api/interaction/sessions`
+- `POST /api/interaction/input`
+- `POST /api/interaction/handoff`
 - `POST /api/northbound/intent`
 - `POST /api/northbound/call`
 - `POST /api/northbound/commission`
@@ -97,9 +101,10 @@ SOUTHBOUND_REMOTE_TOKEN='long-random-token' \
   southbound call living_light turn_on
 ```
 
-CLI commands that use the runtime (intent, call, tools, access, graph, onboard,
-decommission) honor `SOUTHBOUND_REMOTE_URL`. Discovery, survey, and deep scan
-remain local commands because they do not own device state.
+CLI commands that use the runtime (intent, call, tools, access, graph, interact,
+handoff, onboard, decommission) honor `SOUTHBOUND_REMOTE_URL`. Discovery,
+survey, and deep scan remain local commands because they do not own device
+state.
 
 ## Design boundaries
 

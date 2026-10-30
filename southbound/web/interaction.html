@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Southbound · Interaction</title>
+  <link rel="stylesheet" href="/interaction.css">
+</head>
+<body>
+  <header class="top">
+    <a class="brand" href="/">Southbound</a>
+    <label class="runtime-token">Runtime token
+      <input id="runtime-token" type="password" autocomplete="off" placeholder="loopback 可留空">
+    </label>
+    <nav>
+      <a href="/">控制台</a>
+      <a href="/scene">2.5D</a>
+      <a class="active" href="/interaction">Interaction</a>
+    </nav>
+  </header>
+
+  <main>
+    <section class="intro">
+      <p class="eyebrow">MULTI-ENDPOINT SESSION</p>
+      <h1>一个会话，多种硬件。</h1>
+      <p class="lede">同一个 agent 会话可以在 Mac、手机、客厅 Pi、厨房 ESP32 和电视之间接续。输入决定谁来听，路由决定谁来说。</p>
+    </section>
+
+    <section class="layout">
+      <div class="left">
+        <section class="panel">
+          <div class="panel-head">
+            <div>
+              <p class="eyebrow">ENDPOINTS</p>
+              <h2>交互端点</h2>
+            </div>
+            <button id="refresh" class="ghost" type="button">刷新</button>
+          </div>
+          <div id="endpoints" class="endpoint-grid" aria-live="polite"></div>
+        </section>
+
+        <section class="panel">
+          <div class="panel-head">
+            <div>
+              <p class="eyebrow">COMPOSER</p>
+              <h2>发送一轮</h2>
+            </div>
+            <span id="session-badge" class="badge">未开始</span>
+          </div>
+          <form id="composer">
+            <label>输入端点
+              <select id="input-endpoint"></select>
+            </label>
+            <label>输入文字
+              <textarea id="text" rows="4" placeholder="例如：打开客厅灯，并告诉我在哪里"></textarea>
+            </label>
+            <fieldset>
+              <legend>输出端点（可多选）</legend>
+              <div id="output-endpoints" class="outputs"></div>
+            </fieldset>
+            <label class="check">
+              <input id="execute" type="checkbox" checked>
+              <span>执行设备动作（经过 AccessHub）</span>
+            </label>
+            <label class="check">
+              <input id="auto-route" type="checkbox">
+              <span>自动路由（忽略输出勾选）</span>
+            </label>
+            <div class="actions">
+              <button class="primary" type="submit">发送</button>
+              <span id="status" class="status"></span>
+            </div>
+          </form>
+        </section>
+
+        <section class="panel">
+            <div class="panel-head">
+              <div>
+                <p class="eyebrow">HANDOFF</p>
+                <h2>会话交接</h2>
+              </div>
+              <div class="session-actions">
+                <span id="session-id" class="mono">—</span>
+                <button id="new-session" class="ghost" type="button">新建</button>
+              </div>
+            </div>
+          <div id="handoff" class="handoff"></div>
+        </section>
+      </div>
+
+      <div class="right">
+        <section class="panel">
+          <div class="panel-head">
+            <div>
+              <p class="eyebrow">OUTPUT</p>
+              <h2>这一轮谁在说</h2>
+            </div>
+          </div>
+          <div id="outputs" class="output-list"></div>
+        </section>
+
+        <section class="panel">
+          <div class="panel-head">
+            <div>
+              <p class="eyebrow">TRACE</p>
+              <h2>事件</h2>
+            </div>
+          </div>
+          <div id="trace" class="trace"></div>
+        </section>
+      </div>
+    </section>
+  </main>
+
+  <script src="/interaction.js"></script>
+</body>
+</html>
