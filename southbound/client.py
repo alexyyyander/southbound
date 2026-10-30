@@ -129,6 +129,10 @@ class RemoteRuntime:
         payload = self._request("GET", "/api/interaction/sessions")
         return list(payload.get("sessions") or [])
 
+    def interaction_session(self, session_id: str) -> dict[str, Any]:
+        encoded = urllib.parse.quote(session_id, safe="")
+        return self._request("GET", f"/api/interaction/sessions/{encoded}")
+
     def interaction_input(self, payload: dict[str, Any]) -> dict[str, Any]:
         return self._request("POST", "/api/interaction/input", payload)
 

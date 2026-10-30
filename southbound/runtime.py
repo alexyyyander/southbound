@@ -257,7 +257,7 @@ class SouthboundRuntime:
 
     # -- northbound intent -------------------------------------------------
 
-    def intent(self, goal: str) -> dict:
+    def intent(self, goal: str, context: dict[str, Any] | None = None) -> dict:
         self.events.publish(
             {
                 "type": "intent",
@@ -269,7 +269,7 @@ class SouthboundRuntime:
             }
         )
         try:
-            result = run_goal(goal, self._agent_runtime)
+            result = run_goal(goal, self._agent_runtime, context=context)
         except Exception as exc:  # keep the runtime alive on planner bugs
             result = {
                 "goal": goal,

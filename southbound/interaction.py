@@ -12,6 +12,7 @@ edge runtime.
 
 from __future__ import annotations
 
+import hmac
 import json
 import sqlite3
 import threading
@@ -340,24 +341,21 @@ class InteractionService:
         runtime: Any,
         store: InteractionStore | None = None,
         seed_simulated: bool = True,
+        owner_token: str = "",
     ) -> None:
         self.runtime = runtime
         self.store = store or InteractionStore()
+        self.owner_token = _text(owner_token)
+        self._turn_lock = threading.RLock()
         if seed_simulated:
             existing = {
-                endpoint["endpoint_id"]: endpoint
-                for endpoint in self.store.list_endpoints()
+                endpoint["endpoint_id"] for endpoint in self.store.list_endpoints()
             }
             for endpoint in _SIMULATED_ENDPOINTS:
-                current = existing.get(endpoint["endpoint_id"])
-                if current is None:
-                    trust, last_seen = "owner", _now()
-                elif current.get("metadata", {}).get("simulated"):
-                    trust, last_seen = current["trust"], current["last_seen"]
-                else:
+                if endpoint["endpoint_id"] in existing:
                     continue
                 self.store.upsert_endpoint(
-                    {**endpoint, "trust": trust, "last_seen": last_seen}
+                    {**endpoint, "trust": "owner", "last_seen": _now()}
                 )
 
     def close(self) -> None:
@@ -376,10 +374,26 @@ class InteractionService:
             raise ValueError(
                 f"existing endpoint requires confirm=true to update: {endpoint_id}"
             )
+        if confirm:
+            supplied = _text(payload.get("owner_token"))
+            if not self.owner_token:
+                raise ValueError(
+                    "owner approval token is not configured; set "
+                    "SOUTHBOUND_INTERACTION_OWNER_TOKEN"
+                )
+            if not hmac.compare_digest(
+                supplied.encode("utf-8"), self.owner_token.encode("utf-8")
+            ):
+                raise ValueError("invalid owner approval token")
         trust = "owner" if confirm else "unverified"
+        stored = {
+            key: value
+            for key, value in payload.items()
+            if key not in {"confirm", "owner_token"}
+        }
         endpoint = self.store.upsert_endpoint(
             {
-                **payload,
+                **stored,
                 "endpoint_id": endpoint_id,
                 "trust": trust,
                 "last_seen": _now(),
@@ -421,6 +435,10 @@ class InteractionService:
         return self.store.get_session(session_id)
 
     def handle_input(self, payload: dict[str, Any]) -> dict[str, Any]:
+        with self._turn_lock:
+            return self._handle_input(payload)
+
+    def _handle_input(self, payload: dict[str, Any]) -> dict[str, Any]:
         endpoint_id = _text(payload.get("endpoint_id"))
         text = _text(payload.get("text"))
         if not endpoint_id:
@@ -471,13 +489,26 @@ class InteractionService:
 
         execute = _as_bool(payload.get("execute", True), default=True)
         intent_result = (
-            self.runtime.intent(text)
+            self.runtime.intent(text, context=session.get("context") or {})
             if execute and hasattr(self.runtime, "intent")
-            else {"ok": True, "summary": text, "steps": []}
+            else {"ok": True, "summary": text, "steps": [], "affected": []}
         )
         response = _text(intent_result.get("summary")) or text
         ok = bool(intent_result.get("ok", True))
         error = "" if ok else response
+        context = dict(session.get("context") or {})
+        context["intent_ok"] = ok
+        context["intent_summary"] = response
+        affected = intent_result.get("affected") or []
+        if affected and isinstance(affected[-1], dict):
+            last = affected[-1]
+            context["last_device_id"] = last.get("id") or context.get(
+                "last_device_id", ""
+            )
+            context["last_device_name"] = last.get("name") or context.get(
+                "last_device_name", ""
+            )
+            context["last_room"] = last.get("room") or context.get("last_room", "")
 
         self._publish(
             {
@@ -503,10 +534,7 @@ class InteractionService:
                 "input_endpoint": endpoint_id,
                 "last_input": text,
                 "last_response": response,
-                "context": {
-                    "intent_ok": ok,
-                    "intent_summary": response,
-                },
+                "context": context,
             }
         )
         persisted = self.store.upsert_session(session)
@@ -541,6 +569,10 @@ class InteractionService:
         }
 
     def handoff(self, payload: dict[str, Any]) -> dict[str, Any]:
+        with self._turn_lock:
+            return self._handoff(payload)
+
+    def _handoff(self, payload: dict[str, Any]) -> dict[str, Any]:
         session_id = _text(payload.get("session_id"))
         endpoint_id = _text(payload.get("endpoint_id"))
         if not session_id or not endpoint_id:

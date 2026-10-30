@@ -54,6 +54,9 @@ class FakeRuntimeHandler(BaseHTTPRequestHandler):
         if parsed.path == "/api/interaction/sessions":
             self._json({"sessions": [{"session_id": "s-1"}]})
             return
+        if parsed.path == "/api/interaction/sessions/s-1":
+            self._json({"session_id": "s-1", "input_endpoint": "pi-living"})
+            return
         if parsed.path == "/api/events/recent":
             self._json({"events": [{"id": 1, "type": "state"}]})
             return
@@ -195,6 +198,9 @@ class RemoteRuntimeTest(unittest.TestCase):
             self.runtime.interaction_endpoints()[0]["endpoint_id"], "phone-owner"
         )
         self.assertEqual(self.runtime.interaction_sessions()[0]["session_id"], "s-1")
+        self.assertEqual(
+            self.runtime.interaction_session("s-1")["input_endpoint"], "pi-living"
+        )
         result = self.runtime.interaction_input(
             {"endpoint_id": "phone-owner", "text": "hello"}
         )

@@ -518,6 +518,7 @@ def _local_interaction() -> InteractionService | None:
         RUNTIME,
         InteractionStore(DATA_DIR / "interaction.sqlite3"),
         seed_simulated=True,
+        owner_token=os.environ.get("SOUTHBOUND_INTERACTION_OWNER_TOKEN", ""),
     )
 
 
@@ -542,9 +543,11 @@ def _tool_interaction_input(arguments: dict) -> dict:
         "endpoint_id": str(arguments.get("endpoint_id") or ""),
         "text": str(arguments.get("text") or ""),
         "session_id": str(arguments.get("session_id") or ""),
-        "output_endpoints": arguments.get("output_endpoints") or [],
-        "execute": bool(arguments.get("execute", True)),
     }
+    if "execute" in arguments:
+        payload["execute"] = arguments.get("execute")
+    if "output_endpoints" in arguments:
+        payload["output_endpoints"] = arguments.get("output_endpoints") or []
     try:
         if hasattr(RUNTIME, "interaction_input"):
             result = RUNTIME.interaction_input(payload)

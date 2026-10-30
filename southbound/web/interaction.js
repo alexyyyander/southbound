@@ -1,14 +1,19 @@
 const state = {
   endpoints: [],
-  sessionId: "",
+  sessionId: sessionStorage.getItem("southbound-session") || "",
+  token: sessionStorage.getItem("southbound-token") || "",
+  inputEndpoint: "",
   sending: false,
+  handoffPending: false,
 };
 
 const $ = (selector) => document.querySelector(selector);
 
 async function api(path, options = {}) {
+  const headers = { "Content-Type": "application/json" };
+  if (state.token) headers.Authorization = `Bearer ${state.token}`;
   const response = await fetch(path, {
-    headers: { "Content-Type": "application/json" },
+    headers,
     ...options,
   });
   const raw = await response.text();
@@ -16,10 +21,15 @@ async function api(path, options = {}) {
   try {
     data = raw ? JSON.parse(raw) : {};
   } catch {
-    data = { error: raw || response.statusText || `HTTP ${response.status}` };
+    data = {};
+  }
+  if (!data || typeof data !== "object" || Array.isArray(data)) {
+    data = {};
   }
   if (!response.ok) {
-    throw new Error(data.error || data.message || `HTTP ${response.status}`);
+    throw new Error(
+      data.error || data.message || raw || response.statusText || `HTTP ${response.status}`,
+    );
   }
   return data;
 }
@@ -45,11 +55,16 @@ function renderEndpoints(selectedInput = "") {
     meta.textContent = `${endpoint.kind} · ${endpoint.location || "未分区"}`;
     const tags = document.createElement("div");
     tags.className = "tags";
-    for (const modality of [...endpoint.input, ...endpoint.output]) {
-      const tag = document.createElement("span");
-      tag.className = "tag";
-      tag.textContent = modality;
-      tags.append(tag);
+    for (const [direction, modalities] of [
+      ["in", endpoint.input],
+      ["out", endpoint.output],
+    ]) {
+      for (const modality of modalities) {
+        const tag = document.createElement("span");
+        tag.className = "tag";
+        tag.textContent = `${direction} · ${modality}`;
+        tags.append(tag);
+      }
     }
     const trust = document.createElement("div");
     trust.className = "trust";
@@ -61,7 +76,7 @@ function renderEndpoints(selectedInput = "") {
 
 function renderControls() {
   const input = $("#input-endpoint");
-  const previous = input.value || "mac-dashboard";
+  const previous = state.inputEndpoint || input.value || "mac-dashboard";
   const previousOutputs = new Set(
     [...document.querySelectorAll("#output-endpoints input:checked")].map(
       (item) => item.value,
@@ -80,7 +95,10 @@ function renderControls() {
   }
   if ([...input.options].some((option) => option.value === previous)) {
     input.value = previous;
+  } else {
+    state.inputEndpoint = input.value;
   }
+  if (!state.inputEndpoint) state.inputEndpoint = input.value;
 
   const outputs = $("#output-endpoints");
   outputs.replaceChildren();
@@ -98,7 +116,42 @@ function renderControls() {
     label.append(checkbox, text);
     outputs.append(label);
   }
-  input.onchange = () => renderEndpoints(input.value);
+  input.onchange = async () => {
+    const target = input.value;
+    const previousEndpoint = state.inputEndpoint;
+    renderEndpoints(target);
+    if (!state.sessionId) {
+      state.inputEndpoint = target;
+      return;
+    }
+    if (state.handoffPending) {
+      input.value = previousEndpoint;
+      return;
+    }
+    state.handoffPending = true;
+    input.disabled = true;
+    try {
+      const result = await api("/api/interaction/handoff", {
+        method: "POST",
+        body: JSON.stringify({
+          session_id: state.sessionId,
+          endpoint_id: target,
+        }),
+      });
+      if (result.session) {
+        state.inputEndpoint = result.session.input_endpoint;
+        setStatus(`已交接给 ${input.options[input.selectedIndex]?.textContent || target}`);
+        renderHandoff();
+      }
+    } catch (error) {
+      input.value = previousEndpoint;
+      renderEndpoints(previousEndpoint);
+      setStatus(error.message);
+    } finally {
+      input.disabled = false;
+      state.handoffPending = false;
+    }
+  };
   renderEndpoints(input.value);
 }
 
@@ -163,6 +216,9 @@ function renderHandoff() {
     button.type = "button";
     button.textContent = `切到 ${endpoint.name}`;
     button.onclick = async () => {
+      if (state.handoffPending) return;
+      state.handoffPending = true;
+      button.disabled = true;
       try {
         const result = await api("/api/interaction/handoff", {
           method: "POST",
@@ -171,16 +227,20 @@ function renderHandoff() {
             endpoint_id: endpoint.endpoint_id,
           }),
         });
-        setStatus(`已交接给 ${endpoint.name}`);
-        $("#session-badge").textContent = "active";
-        $("#session-badge").classList.add("live");
         if (result.session) {
+          state.inputEndpoint = result.session.input_endpoint;
           $("#input-endpoint").value = endpoint.endpoint_id;
+          setStatus(`已交接给 ${endpoint.name}`);
+          $("#session-badge").textContent = "active";
+          $("#session-badge").classList.add("live");
           renderEndpoints(endpoint.endpoint_id);
           renderHandoff();
         }
       } catch (error) {
         setStatus(error.message);
+      } finally {
+        button.disabled = false;
+        state.handoffPending = false;
       }
     };
     container.append(button);
@@ -200,7 +260,7 @@ async function refresh() {
 
 async function sendTurn(event) {
   event.preventDefault();
-  if (state.sending) return;
+  if (state.sending || state.handoffPending) return;
   const text = $("#text").value.trim();
   if (!text) {
     setStatus("先输入一句话。");
@@ -208,20 +268,23 @@ async function sendTurn(event) {
   }
   const outputs = [...document.querySelectorAll("#output-endpoints input:checked")]
     .map((input) => input.value);
+  const body = {
+    endpoint_id: $("#input-endpoint").value,
+    text,
+    session_id: state.sessionId,
+    execute: $("#execute").checked,
+  };
+  if (!$("#auto-route").checked) body.output_endpoints = outputs;
   state.sending = true;
   setStatus("发送中…");
   try {
     const result = await api("/api/interaction/input", {
       method: "POST",
-      body: JSON.stringify({
-        endpoint_id: $("#input-endpoint").value,
-        text,
-        session_id: state.sessionId,
-        output_endpoints: outputs,
-        execute: $("#execute").checked,
-      }),
+      body: JSON.stringify(body),
     });
     state.sessionId = result.session.session_id;
+    state.inputEndpoint = result.session.input_endpoint;
+    sessionStorage.setItem("southbound-session", state.sessionId);
     $("#session-id").textContent = state.sessionId;
     $("#session-badge").textContent = "active";
     $("#session-badge").classList.add("live");
@@ -229,8 +292,12 @@ async function sendTurn(event) {
     renderHandoff();
     setStatus(result.ok ? "完成" : "执行有问题");
     try {
-      const events = await api("/api/events/recent?limit=20");
-      renderTrace(events.events || []);
+      const events = await api("/api/events/recent?limit=50");
+      renderTrace(
+        (events.events || []).filter(
+          (event) => !state.sessionId || event.session_id === state.sessionId,
+        ),
+      );
     } catch {
       // A trace refresh must not turn a completed turn into a failed one.
     }
@@ -241,7 +308,54 @@ async function sendTurn(event) {
   }
 }
 
+function clearSession() {
+  state.sessionId = "";
+  state.inputEndpoint = "";
+  sessionStorage.removeItem("southbound-session");
+  $("#session-id").textContent = "—";
+  $("#session-badge").textContent = "未开始";
+  $("#session-badge").classList.remove("live");
+  $("#text").value = "";
+  renderOutputs([]);
+  renderTrace([]);
+  renderHandoff();
+}
+
+async function restoreSession() {
+  if (!state.sessionId) return;
+  try {
+    const session = await api(
+      `/api/interaction/sessions/${encodeURIComponent(state.sessionId)}`,
+    );
+    state.sessionId = session.session_id;
+    state.inputEndpoint = session.input_endpoint || "";
+    $("#session-id").textContent = state.sessionId;
+    $("#session-badge").textContent = "active";
+    $("#session-badge").classList.add("live");
+    if (state.inputEndpoint) {
+      $("#input-endpoint").value = state.inputEndpoint;
+      renderEndpoints(state.inputEndpoint);
+    }
+    renderHandoff();
+  } catch {
+    clearSession();
+  }
+}
+
 $("#composer").addEventListener("submit", sendTurn);
 $("#refresh").addEventListener("click", refresh);
-refresh();
+$("#new-session").addEventListener("click", clearSession);
+$("#runtime-token").value = state.token;
+$("#runtime-token").addEventListener("change", (event) => {
+  state.token = event.target.value.trim();
+  if (state.token) sessionStorage.setItem("southbound-token", state.token);
+  else sessionStorage.removeItem("southbound-token");
+  refresh().then(restoreSession);
+});
+if (state.sessionId) {
+  $("#session-id").textContent = state.sessionId;
+  $("#session-badge").textContent = "active";
+  $("#session-badge").classList.add("live");
+}
+refresh().then(restoreSession);
 renderHandoff();

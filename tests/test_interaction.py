@@ -7,10 +7,19 @@ from southbound.runtime import SouthboundRuntime
 
 
 class InteractionServiceTest(unittest.TestCase):
-    def make_service(self, store: InteractionStore | None = None) -> InteractionService:
+    def make_service(
+        self,
+        store: InteractionStore | None = None,
+        owner_token: str = "",
+    ) -> InteractionService:
         runtime = SouthboundRuntime()
         self.addCleanup(runtime.close)
-        service = InteractionService(runtime, store, seed_simulated=True)
+        service = InteractionService(
+            runtime,
+            store,
+            seed_simulated=True,
+            owner_token=owner_token,
+        )
         self.addCleanup(service.close)
         return service
 
@@ -23,17 +32,52 @@ class InteractionServiceTest(unittest.TestCase):
         self.assertEqual(endpoints["pi-living"]["trust"], "owner")
 
     def test_modality_aliases_apply_on_create(self) -> None:
-        service = self.make_service()
+        service = self.make_service(owner_token="test-owner")
         endpoint = service.register_endpoint(
             {
                 "endpoint_id": "alias-endpoint",
                 "input_modalities": ["text"],
                 "output_modalities": ["screen"],
                 "confirm": True,
+                "owner_token": "test-owner",
             }
         )
         self.assertEqual(endpoint["input"], ["text"])
         self.assertEqual(endpoint["output"], ["screen"])
+        self.assertNotIn("owner_token", endpoint)
+
+    def test_owner_promotion_requires_configured_token(self) -> None:
+        service = self.make_service()
+        with self.assertRaises(ValueError):
+            service.register_endpoint(
+                {
+                    "endpoint_id": "needs-token",
+                    "input": ["text"],
+                    "output": ["screen"],
+                    "confirm": True,
+                }
+            )
+        service = self.make_service(owner_token="test-owner")
+        with self.assertRaises(ValueError):
+            service.register_endpoint(
+                {
+                    "endpoint_id": "wrong-token",
+                    "input": ["text"],
+                    "output": ["screen"],
+                    "confirm": True,
+                    "owner_token": "wrong",
+                }
+            )
+        endpoint = service.register_endpoint(
+            {
+                "endpoint_id": "right-token",
+                "input": ["text"],
+                "output": ["screen"],
+                "confirm": True,
+                "owner_token": "test-owner",
+            }
+        )
+        self.assertEqual(endpoint["trust"], "owner")
 
     def test_default_input_outputs_to_same_endpoint(self) -> None:
         service = self.make_service()
@@ -147,6 +191,108 @@ class InteractionServiceTest(unittest.TestCase):
             )["ok"]
         )
 
+    def test_followup_uses_last_device_context(self) -> None:
+        service = self.make_service()
+        first = service.handle_input(
+            {
+                "endpoint_id": "phone-owner",
+                "text": "打开客厅灯",
+                "execute": True,
+            }
+        )
+        self.assertIn("last_device_id", first["session"]["context"])
+        second = service.handle_input(
+            {
+                "endpoint_id": "phone-owner",
+                "text": "关掉它",
+                "session_id": first["session"]["session_id"],
+                "execute": True,
+            }
+        )
+        self.assertTrue(second["ok"])
+        self.assertFalse(
+            service.runtime.simulator.get_device("living_light")["state"]["on"]
+        )
+
+    def test_unicode_owner_token_is_valid(self) -> None:
+        service = self.make_service(owner_token="☃")
+        endpoint = service.register_endpoint(
+            {
+                "endpoint_id": "unicode-owner",
+                "input": ["text"],
+                "output": ["screen"],
+                "confirm": True,
+                "owner_token": "☃",
+            }
+        )
+        self.assertEqual(endpoint["trust"], "owner")
+
+    def test_owner_seed_does_not_overwrite_confirmed_edit(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "interaction.sqlite3"
+            first_store = InteractionStore(path)
+            first = InteractionService(
+                SouthboundRuntime(),
+                first_store,
+                owner_token="test-owner",
+            )
+            try:
+                first.register_endpoint(
+                    {
+                        "endpoint_id": "pi-living",
+                        "name": "RENAMED PI",
+                        "confirm": True,
+                        "owner_token": "test-owner",
+                    }
+                )
+            finally:
+                first.close()
+                first.runtime.close()
+                first_store.close()
+
+            second_store = InteractionStore(path)
+            second = InteractionService(SouthboundRuntime(), second_store)
+            try:
+                self.assertEqual(
+                    next(
+                        item
+                        for item in second.endpoints()
+                        if item["endpoint_id"] == "pi-living"
+                    )["name"],
+                    "RENAMED PI",
+                )
+            finally:
+                second.close()
+                second.runtime.close()
+                second_store.close()
+
+    def test_mcp_preserves_raw_execute_and_failure(self) -> None:
+        import json
+        from unittest.mock import patch
+
+        from southbound import mcp_server
+
+        class FakeRuntime:
+            def __init__(self):
+                self.payload = None
+
+            def interaction_input(self, payload):
+                self.payload = payload
+                return {"ok": False, "session": {"session_id": "s-1"}, "outputs": []}
+
+        fake = FakeRuntime()
+        with patch.object(mcp_server, "RUNTIME", fake):
+            result = mcp_server._tool_interaction_input(
+                {
+                    "endpoint_id": "phone-owner",
+                    "text": "hello",
+                    "execute": "false",
+                }
+            )
+        self.assertEqual(fake.payload["execute"], "false")
+        self.assertTrue(result["isError"])
+        self.assertFalse(json.loads(result["content"][0]["text"])["ok"])
+
     def test_unapproved_endpoint_is_not_used(self) -> None:
         service = self.make_service()
         service.register_endpoint(
@@ -167,7 +313,7 @@ class InteractionServiceTest(unittest.TestCase):
             )
 
     def test_existing_owner_endpoint_requires_confirmation(self) -> None:
-        service = self.make_service()
+        service = self.make_service(owner_token="test-owner")
         with self.assertRaises(ValueError):
             service.register_endpoint(
                 {"endpoint_id": "pi-living", "name": "客厅 Pi（改名）"}
@@ -177,6 +323,7 @@ class InteractionServiceTest(unittest.TestCase):
                 "endpoint_id": "pi-living",
                 "name": "客厅 Pi（改名）",
                 "confirm": True,
+                "owner_token": "test-owner",
             }
         )
         self.assertEqual(updated["trust"], "owner")
@@ -306,7 +453,7 @@ class InteractionServiceTest(unittest.TestCase):
             def __init__(self):
                 self.events = FakeEvents()
 
-            def intent(self, _text):
+            def intent(self, _text, context=None):
                 return {"ok": False, "summary": "policy denied", "steps": []}
 
         service = InteractionService(FakeRuntime(), seed_simulated=True)

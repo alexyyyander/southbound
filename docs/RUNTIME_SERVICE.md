@@ -101,9 +101,10 @@ SOUTHBOUND_REMOTE_TOKEN='long-random-token' \
   southbound call living_light turn_on
 ```
 
-CLI commands that use the runtime (intent, call, tools, access, graph, onboard,
-decommission) honor `SOUTHBOUND_REMOTE_URL`. Discovery, survey, and deep scan
-remain local commands because they do not own device state.
+CLI commands that use the runtime (intent, call, tools, access, graph, interact,
+handoff, onboard, decommission) honor `SOUTHBOUND_REMOTE_URL`. Discovery,
+survey, and deep scan remain local commands because they do not own device
+state.
 
 ## Design boundaries
 

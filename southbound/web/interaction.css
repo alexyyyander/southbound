@@ -43,6 +43,24 @@ body {
 nav { display: flex; gap: 20px; }
 nav a { color: var(--muted); text-decoration: none; font-size: 12px; }
 nav a.active, nav a:hover { color: var(--teal); }
+.runtime-token {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin-left: auto;
+  margin-right: 18px;
+  color: var(--muted);
+  font: 9px var(--mono);
+}
+.runtime-token input {
+  width: 150px;
+  border: 1px solid var(--rule);
+  border-radius: 6px;
+  padding: 6px 8px;
+  color: var(--ink);
+  font: 10px var(--mono);
+}
+.session-actions { display: flex; align-items: center; gap: 9px; }
 
 main { max-width: 1220px; margin: 0 auto; padding: 18px 28px 56px; }
 
@@ -139,6 +157,8 @@ button { font: 12px var(--sans); cursor: pointer; }
 @media (max-width: 860px) {
   .layout { grid-template-columns: 1fr; }
   .endpoint-grid { grid-template-columns: 1fr; }
+  .runtime-token { margin-right: 8px; }
+  .runtime-token input { width: 100px; }
   main { padding-inline: 18px; }
   .top { padding-inline: 18px; }
 }

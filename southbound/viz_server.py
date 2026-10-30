@@ -56,6 +56,7 @@ INTERACTION = InteractionService(
     RUNTIME,
     InteractionStore(DATA_DIR / "interaction.sqlite3"),
     seed_simulated=True,
+    owner_token=os.environ.get("SOUTHBOUND_INTERACTION_OWNER_TOKEN", ""),
 )
 
 
@@ -97,6 +98,21 @@ class Handler(BaseHTTPRequestHandler):
             },
             status=401,
         )
+
+    def _interaction_post_allowed(self, path: str) -> bool:
+        if not path.startswith("/api/interaction/"):
+            return True
+        content_type = (
+            self.headers.get("Content-Type", "").split(";")[0].strip().lower()
+        )
+        if content_type != "application/json":
+            return False
+        origin = self.headers.get("Origin") or self.headers.get("Referer")
+        if not origin:
+            return True
+        origin_host = urlparse(origin).hostname
+        request_host = self.headers.get("Host", "").split(":")[0]
+        return origin_host in {"127.0.0.1", "localhost", "::1", request_host}
 
     def do_GET(self) -> None:
         parsed = urlparse(self.path)
@@ -221,6 +237,15 @@ class Handler(BaseHTTPRequestHandler):
         if not self._authorized(path):
             self._unauthorized()
             return
+        if not self._interaction_post_allowed(path):
+            self._json(
+                {
+                    "ok": False,
+                    "error": "interaction API requires same-origin JSON",
+                },
+                status=403,
+            )
+            return
         body = self._body()
         if path in ("/api/agent", "/api/northbound/intent"):
             goal = str(body.get("goal", "")).strip()
@@ -288,7 +313,7 @@ class Handler(BaseHTTPRequestHandler):
         if path == "/api/interaction/endpoints":
             try:
                 self._json(INTERACTION.register_endpoint(body))
-            except (ValueError, KeyError) as exc:
+            except (ValueError, KeyError, TypeError) as exc:
                 self._json({"ok": False, "error": str(exc)}, status=400)
             return
         if path == "/api/interaction/heartbeat":

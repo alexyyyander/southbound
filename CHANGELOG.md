@@ -26,7 +26,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `southbound interact`, and MCP `interaction_endpoints` / `interaction_input`.
 - Tests for graph identity merging, persistence, runtime state projection,
   event replay, HA WebSocket handshake/state mapping, and interaction routing
-  (122 tests total).
+  (128 tests total).
 
 ## [0.11.0] - 2026-10-27
 

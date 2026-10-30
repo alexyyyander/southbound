@@ -9,6 +9,9 @@
 <body>
   <header class="top">
     <a class="brand" href="/">Southbound</a>
+    <label class="runtime-token">Runtime token
+      <input id="runtime-token" type="password" autocomplete="off" placeholder="loopback 可留空">
+    </label>
     <nav>
       <a href="/">控制台</a>
       <a href="/scene">2.5D</a>
@@ -59,6 +62,10 @@
               <input id="execute" type="checkbox" checked>
               <span>执行设备动作（经过 AccessHub）</span>
             </label>
+            <label class="check">
+              <input id="auto-route" type="checkbox">
+              <span>自动路由（忽略输出勾选）</span>
+            </label>
             <div class="actions">
               <button class="primary" type="submit">发送</button>
               <span id="status" class="status"></span>
@@ -67,13 +74,16 @@
         </section>
 
         <section class="panel">
-          <div class="panel-head">
-            <div>
-              <p class="eyebrow">HANDOFF</p>
-              <h2>会话交接</h2>
+            <div class="panel-head">
+              <div>
+                <p class="eyebrow">HANDOFF</p>
+                <h2>会话交接</h2>
+              </div>
+              <div class="session-actions">
+                <span id="session-id" class="mono">—</span>
+                <button id="new-session" class="ghost" type="button">新建</button>
+              </div>
             </div>
-            <span id="session-id" class="mono">—</span>
-          </div>
           <div id="handoff" class="handoff"></div>
         </section>
       </div>

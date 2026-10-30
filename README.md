@@ -62,7 +62,7 @@
 | **运行时与事件流** | SouthboundRuntime + EventBus + SSE；`serve` 可作为共享 runtime，MCP/CLI 通过 `SOUTHBOUND_REMOTE_URL` 连接 |
 | **LAN 设备图** | SQLite 持久化设备身份、能力、来源、控制范围与缓存状态；合并 inventory / deep scan / commissioning / access binding |
 | **共享 runtime** | 一个设备图、策略和审计供 Dashboard / MCP / CLI 共用；支持 `southbound mcp --remote` 与 Bearer token |
-| **多硬件交互** | `/interaction`：端点注册、会话、模态路由、跨端输出与 handoff；Mac/手机/Pi/ESP32/TV 模拟端点 |
+| **多硬件交互** | `/interaction`：会话、模态路由、跨端输出与 handoff；端点注册通过 HTTP API；Mac/手机/Pi/ESP32/TV 模拟端点 |
 | **2.5D 房间实验** | `GET /scene`：可移动 avatar、presence 信号、点击设备、自动反射与回读验证 |
 | **Splat 预览** | `/scene` 内切换 WebGL 合成 splat：轨道旋转、设备热点、avatar 投影；同一控制层 |
 | **可视化** | 网络拓扑、设备清单、模拟端点、Agent 控制台、接入表单 |
@@ -285,6 +285,7 @@ Southbound 的“扩散”是 **受控接入**，不是把 agent 代码复制到
 | `southbound access` | 适配器、策略、审计与运行时状态 |
 | `southbound graph` | 查看持久化 LAN 设备图（`--json` / `--device`） |
 | `southbound interact "..."` | 通过交互端点发送一轮，支持 `--output`、`--session`、`--no-execute` |
+| `southbound handoff <session> <endpoint>` | 切换 session 的输入端点 |
 | `southbound mcp` | 启动 stdio MCP server；用 `--remote URL` 连接共享 runtime |
 | `southbound info` | 工具链地图 |
 
@@ -361,6 +362,7 @@ export HA_TOKEN="..."
 - MQTT 用户名/密码同样用环境变量；
 - 已授权设备记录写在 `data/commissioned.json`，不含 token/password；
 - LAN 设备图与事件日志写在 `data/lan_state.sqlite3`；
+- 交互端点 owner 审批使用 `SOUTHBOUND_INTERACTION_OWNER_TOKEN`，不会写入数据文件；
 - 数据文件都在 `data/`，默认不进入仓库。
 
 ## 仓库结构
@@ -401,7 +403,7 @@ southbound/
 ├── config/access.example.json
 ├── deploy/systemd/          # Pi 常驻 harness 示例
 ├── docs/                    # About、架构、协议、演示、harness、接入层、onboarding、芯片、信号、硬件、扫描
-├── tests/                   # 122 项 unittest
+├── tests/                   # 128 项 unittest
 ├── data/                    # 本地生成，gitignored
 ├── viz_server.py            # 面板兼容入口
 ├── mcp_server.py            # MCP 兼容入口
@@ -428,7 +430,7 @@ make lint     # ruff check .
 make build    # wheel + sdist
 ```
 
-当前 122 项标准库测试覆盖分级规则、模拟器、agent 目标拆分、能力校验、策略、审计、工具目录、运行时/事件总线、持久化 LAN 图与事件日志、多硬件交互端点/会话/路由、远程 runtime client/token、受控接入与持久化、2.5D 场景 presence/自动验证、survey 解析/readiness、HA 适配器映射、MQTT payload 和 CLI 解析，以及适配器注册、BLE/NFC 模拟读写、设备事件、驱动边界和资源释放。
+当前 128 项标准库测试覆盖分级规则、模拟器、agent 目标拆分、能力校验、策略、审计、工具目录、运行时/事件总线、持久化 LAN 图与事件日志、多硬件交互端点/会话/路由、远程 runtime client/token、受控接入与持久化、2.5D 场景 presence/自动验证、survey 解析/readiness、HA 适配器映射、MQTT payload 和 CLI 解析，以及适配器注册、BLE/NFC 模拟读写、设备事件、驱动边界和资源释放。
 
 CI 在 Python 3.10–3.13 上跑 ruff、单元测试和 wheel/sdist 构建。
 
@@ -473,7 +475,7 @@ CI 在 Python 3.10–3.13 上跑 ruff、单元测试和 wheel/sdist 构建。
 - WebGL 合成 splat 预览：轨道相机、设备热点、avatar 投影；
 - 无主机 `survey`：Wi-Fi/BLE/radio 证据、服务指纹、Pi/Linux 支持、readiness 报告；
 - 18 个 MCP 工具；
-- 122 项测试、CI、wheel/sdist。
+- 128 项测试、CI、wheel/sdist。
 
 **下一步**
 

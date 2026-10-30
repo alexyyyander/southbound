@@ -86,7 +86,7 @@ southbound mcp
 | `access/commissioning.py` | 已授权设备的非敏感持久化记录与启动恢复 | 可用 |
 | `config/access.example.json` | HA / MQTT / Zigbee2MQTT 配置示例 | 可用 |
 | `southbound/web/` | 观测站风格可视化面板 | 可用 |
-| `tests/` | 标准库 unittest，覆盖分级、模拟闭环、接入层策略与审计、运行时/事件总线、远程 runtime client/token、受控接入、LAN 图与事件持久化、HA WebSocket 事件、多硬件交互、2.5D 场景、survey | 122 项通过 |
+| `tests/` | 标准库 unittest，覆盖分级、模拟闭环、接入层策略与审计、运行时/事件总线、远程 runtime client/token、受控接入、LAN 图与事件持久化、HA WebSocket 事件、多硬件交互、2.5D 场景、survey | 128 项通过 |
 
 ### 接入工具层
 

@@ -10,7 +10,7 @@ Southbound 的控制面回答“谁能控制哪个设备”；交互面回答“
 - **脸**：屏幕、LED、TV、投影；
 - **手**：通过 Southbound AccessHub 执行设备动作。
 
-同一个 session 可以跨端点接续；每个端点只负责自己有能力处理的模态。
+同一个 session 可以跨端点接续；每个端点只负责自己有能力处理的模态。P0 会把上一轮受影响设备和意图摘要存入 session context，用于“关掉它/再调暗一点”等简单指代；完整多轮语义仍由后续 agent planner 负责。
 
 ## 端点模型
 
@@ -40,7 +40,13 @@ Southbound 的控制面回答“谁能控制哪个设备”；交互面回答“
 | `esp32-kitchen` | 厨房 ESP32 | button, wake_word | led, short_tts |
 | `tv-living` | 电视 | remote | screen, audio |
 
-端点注册默认是 `unverified`；只有 `confirm=true` 才会成为 `owner`。已存在的端点再次注册必须带 `confirm=true`，否则会被拒绝，避免无确认改写已批准端点的模态和路由。注册/审批会写入 AccessHub 审计。
+端点注册默认是 `unverified`。提升为 `owner` 需要同时满足：
+
+- `confirm=true`；
+- 请求携带与服务端 `SOUTHBOUND_INTERACTION_OWNER_TOKEN` 匹配的 `owner_token`；
+- 服务端必须已配置该环境变量，否则拒绝 owner 提升。
+
+已存在的端点再次注册也必须带 `confirm=true` 和有效的 owner token，否则会被拒绝，避免无确认改写已批准端点的模态和路由。`owner_token` 不写入 SQLite、不返回给客户端；注册/审批会写入 AccessHub 审计。内置模拟端点是演示数据，直接以 owner 预置。
 
 ## Session 与路由
 
@@ -79,7 +85,7 @@ Southbound 的控制面回答“谁能控制哪个设备”；交互面回答“
 
 ### 确认与错误
 
-`confirm` 和 `execute` 只接受真实布尔值或 `true/false`、`1/0` 文本；`"false"` 不会提升端点信任，也不会执行设备动作。失败的 intent 会以 `ok:false` 和 `error` 写入 interaction 事件，不会伪装成成功。
+`confirm` 和 `execute` 只接受真实布尔值或 `true/false`、`1/0` 文本；`"false"` 不会提升端点信任，也不会执行设备动作。owner 提升还需要 `SOUTHBOUND_INTERACTION_OWNER_TOKEN` 和匹配的 `owner_token`。失败的 intent 会以 `ok:false` 和 `error` 写入 interaction 事件，不会伪装成成功。
 
 ## HTTP API
 
@@ -146,7 +152,8 @@ Content-Type: application/json
   "input": ["text", "audio"],
   "output": ["screen", "audio"],
   "capabilities": ["tts"],
-  "confirm": true
+  "confirm": true,
+  "owner_token": "<SOUTHBOUND_INTERACTION_OWNER_TOKEN>"
 }
 ```
 
@@ -161,11 +168,16 @@ southbound interact "打开客厅灯" \
 
 ```bash
 southbound interact "灯太亮了" \
-  --endpoint pi-living \
   --session s-xxxxxxxxxxxx
 ```
 
-`--no-execute` 只做路由和渲染，不调用 AccessHub。
+不传 `--endpoint` 且提供 `--session` 时，CLI 会使用 session 当前的 input endpoint。需要切换时：
+
+```bash
+southbound handoff s-xxxxxxxxxxxx pi-living
+```
+
+`--no-execute` 只做路由和渲染，不调用 AccessHub。不传 `--output` 时默认路由到当前输入端点；传 `--output` 可指定一个或多个输出端点。
 
 ## MCP
 
@@ -177,10 +189,19 @@ southbound interact "灯太亮了" \
 启动 `southbound serve` 后打开 `/interaction`：
 
 - 端点卡片显示输入/输出模态、位置和信任状态；
-- 选择输入端点、输入文字、勾选输出端点；
-- 查看每个输出端点的模态和渲染结果；
-- 查看这一轮事件；
+- 选择输入端点、输入文字、勾选输出端点；已有 session 时切换输入端点会自动 handoff；
+- “自动路由”勾选后忽略输出勾选，交给后端默认路由；取消勾选时可显式选择零个或多个输出端点；
+- 页面保存 session 到 `sessionStorage`，刷新后可恢复，也提供“新建”按钮；
+- 非 loopback 访问时可在页头填写 runtime token，之后所有 API 请求带 Bearer；
+- 查看当前 session 的事件，而不是全局事件流；
 - 创建 session 后可直接 handoff。
+
+## 安全边界
+
+- 非 loopback 访问需要 `Authorization: Bearer`；`/interaction` 页头可填写 runtime token。
+- interaction POST 只接受 `Content-Type: application/json`，并拒绝跨 Origin/Referer 请求，避免浏览器表单/CSRF 直接驱动 loopback。
+- 端点 owner 提升需要 `SOUTHBOUND_INTERACTION_OWNER_TOKEN`，token 不落库。
+- 高风险设备动作仍经过 AccessHub 的策略、确认和审计。
 
 ## 硬件落点
 

@@ -52,7 +52,7 @@ Wi-Fi / Zigbee / Matter / ESPHome / MQTT
 | POST | `/api/scene/automation` | 开/关场景自动模式 |
 | POST | `/api/scene/reset` | 重置房间与模拟器 |
 
-`/api/access/*`、`/api/agent` 是兼容别名。所有响应都是 JSON；SSE 使用 `text/event-stream`。LAN 图与事件日志持久化在 `data/lan_state.sqlite3`，事件 id 跨重启继续递增。
+`/api/access/*`、`/api/agent` 是兼容别名。所有响应都是 JSON；SSE 使用 `text/event-stream`。LAN 图与事件日志持久化在 `data/lan_state.sqlite3`，事件 id 跨重启继续递增。交互端点提升为 owner 需要 `confirm=true` 且 `owner_token` 匹配服务端 `SOUTHBOUND_INTERACTION_OWNER_TOKEN`。
 
 `SouthboundRuntime` 默认嵌入进程；`southbound serve` 作为共享 runtime 时，MCP/CLI 通过 `SOUTHBOUND_REMOTE_URL` 使用同一组 HTTP 端点。见 [共享 Runtime Service](RUNTIME_SERVICE.md)。
 
