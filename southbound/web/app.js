@@ -19,6 +19,13 @@
     devices: [],
     sim: [],
     access: null,
+    bindings: [],
+    events: [],
+    scope: "all",
+    selectedBinding: null,
+    pulseTimer: null,
+    stream: null,
+    composing: false,
     catalog: null,
     eventCount: 0,
     tier: "all",
@@ -79,10 +86,14 @@
   }
 
   function renderStats() {
-    $("#stat-devices").textContent = state.devices.length || "—";
-    const tiers = new Set(state.devices.map(tierOf));
-    $("#stat-tiers").textContent = state.devices.length ? tiers.size : "—";
-    $("#stat-sim").textContent = state.sim.length || "—";
+    $("#stat-devices").textContent = state.inventory ? state.devices.length : "—";
+    $("#stat-tiers").textContent = state.access?.adapters?.length ?? "—";
+    $("#stat-sim").textContent = state.access?.devices ?? "—";
+    $("#stat-capabilities").textContent = state.catalog?.tools?.length ?? "—";
+    const ready = (state.access?.adapters || []).filter(item => item.available).length;
+    $("#adapter-summary").textContent = state.access ? `${ready} 个驱动就绪 · 不代表硬件在线` : "运行时不可用";
+    const policy = {supervised: "监督模式", read_only: "只读模式", autonomous: "自主模式"};
+    $("#policy-summary").textContent = policy[state.access?.policy?.mode] || "策略未读取";
   }
 
   function renderRail() {
@@ -106,228 +117,120 @@
         : "AccessHub 未启用";
   }
 
+  const PROTOCOLS = {
+    sim: ["Simulator", "内存模拟器", "SIM"],
+    home_assistant: ["Home Assistant", "REST · 实体桥接", "HA"],
+    mqtt: ["MQTT", "Publish / Subscribe", "MQ"],
+    zigbee2mqtt: ["Zigbee2MQTT", "MQTT · Zigbee 桥接", "ZB"],
+    ble: ["Bluetooth LE", "GATT · Read / Notify", "BLE"],
+    nfc: ["NFC", "UID · NDEF / Tag", "NFC"],
+  };
+
   function buildTopoNodes() {
-    const gatewayIp = state.inventory?.host?.gateway || "";
-    const gateway = state.devices.find((device) => device.ip === gatewayIp);
-    const nas = state.devices.find((device) => kindOf(device).includes("NAS"));
-    const printer = state.devices.find((device) => kindOf(device).includes("打印机"));
-    const esp32 = state.devices.find((device) => kindOf(device).includes("ESP32"));
-    const macs = state.devices.filter(
-      (device) => kindOf(device).includes("Mac") || device.is_self
-    );
-    const phones = state.devices.filter((device) => kindOf(device).includes("随机 MAC"));
-    const routers = state.devices.filter(
-      (device) =>
-        kindOf(device).includes("路由器/网关") && device.ip !== gatewayIp
-    );
-    const others = state.devices.filter((device) =>
-      ["未知设备", "Wi-Fi 模组设备", "蜂窝模块/CPE", "智能屏/电视"].some((kind) =>
-        kindOf(device).includes(kind)
-      )
-    );
-
-    const nodes = [
-      {
-        key: "gateway",
-        x: 500,
-        y: 280,
-        r: 48,
-        label: "主路由",
-        sub: gateway?.ip || gatewayIp || "gateway",
-        icon: "router",
-        tier: gateway ? tierOf(gateway) : "T0",
-        count: null,
-        filter: { tier: "T0", query: "路由器" },
-      },
-      {
-        key: "aps",
-        x: 500,
-        y: 98,
-        r: 30,
-        label: `AP ×${routers.length}`,
-        sub: routers.length ? "FTTR / 子路由" : "未发现",
-        icon: "router",
-        tier: "T0",
-        count: routers.length || null,
-        filter: { tier: "T0", query: "路由器" },
-      },
-      {
-        key: "nas",
-        x: 220,
-        y: 150,
-        r: 34,
-        label: "NAS",
-        sub: nas?.ip || "未发现",
-        icon: "nas",
-        tier: nas ? tierOf(nas) : "T2",
-        count: null,
-        filter: { query: "NAS" },
-      },
-      {
-        key: "printer",
-        x: 780,
-        y: 150,
-        r: 34,
-        label: "打印机",
-        sub: printer?.ip || "未发现",
-        icon: "printer",
-        tier: printer ? tierOf(printer) : "T0",
-        count: null,
-        filter: { query: "打印机" },
-      },
-      {
-        key: "esp32",
-        x: 840,
-        y: 320,
-        r: 34,
-        label: "ESP32",
-        sub: esp32?.ip || "未发现",
-        icon: "chip",
-        tier: esp32 ? tierOf(esp32) : "T1",
-        count: null,
-        filter: { query: "ESP32" },
-      },
-      {
-        key: "macs",
-        x: 210,
-        y: 350,
-        r: 40,
-        label: `Mac ×${macs.length}`,
-        sub: "T3 · 编排候选",
-        icon: "laptop",
-        tier: "T3",
-        count: macs.length || null,
-        filter: { tier: "T3" },
-      },
-      {
-        key: "phones",
-        x: 470,
-        y: 470,
-        r: 36,
-        label: `手机/平板 ×${phones.length}`,
-        sub: "随机 MAC",
-        icon: "phone",
-        tier: "T0",
-        count: phones.length || null,
-        filter: { query: "随机 MAC" },
-      },
-      {
-        key: "others",
-        x: 780,
-        y: 470,
-        r: 32,
-        label: `其他 ×${others.length}`,
-        sub: "模组 / 智能屏 / CPE",
-        icon: "chip",
-        tier: "?",
-        count: others.length || null,
-        filter: { query: "未知" },
-      },
-    ];
-
-    return nodes.filter(
-      (node) =>
-        !["aps", "nas", "printer", "esp32", "macs", "phones", "others"].includes(node.key) ||
-        node.count !== 0 ||
-        node.sub !== "未发现"
-    );
+    const adapters = state.access?.adapters || [];
+    const catalog = state.access?.adapter_catalog?.length
+      ? state.access.adapter_catalog : adapters;
+    return catalog.map(spec => {
+      const configured = adapters.find(item => item.name === spec.name);
+      const devices = state.bindings.filter(item => item.adapter === spec.name);
+      return {
+        key: spec.name,
+        label: PROTOCOLS[spec.name]?.[0] || spec.name,
+        sub: PROTOCOLS[spec.name]?.[1] || "自定义协议",
+        icon: PROTOCOLS[spec.name]?.[2] || "IO",
+        enabled: Boolean(configured),
+        available: Boolean(configured?.available),
+        count: configured?.devices || 0,
+        devices,
+      };
+    }).sort((a, b) => Number(b.enabled) - Number(a.enabled))
+      .filter(item => state.scope === "all" || item.enabled);
   }
 
   function renderTopology() {
     const nodes = buildTopoNodes();
     state.topoNodes = nodes;
-    const linkLayer = $("#topo-links");
-    const ringLayer = $("#topo-rings");
-    const nodeLayer = $("#topo-nodes");
-
-    ringLayer.innerHTML = state.devices.length
-      ? `<circle class="ring" cx="500" cy="280" r="72"></circle><circle class="ring" cx="500" cy="280" r="108"></circle>`
-      : "";
-
-    if (!state.devices.length) {
-      linkLayer.innerHTML = "";
-      nodeLayer.innerHTML = `<text x="500" y="260" text-anchor="middle" fill="#70848b" font-size="13">尚无扫描数据</text>`;
-      $("#topo-caption").textContent = "运行 discover.py 后刷新页面";
-      $("#topo-time").textContent = "—";
+    const height = Math.max(300, nodes.length * 66 + 26);
+    const center = height / 2;
+    $("#topology-svg").setAttribute("viewBox", `0 0 1120 ${height}`);
+    $("#topo-rings").innerHTML = "";
+    if (!nodes.length) {
+      $("#topo-links").innerHTML = "";
+      $("#topo-nodes").innerHTML = `<text x="560" y="140" text-anchor="middle" class="graph-sub">${state.access ? "当前没有启用的适配器" : "无法读取运行时，请检查服务连接"}</text>`;
+      $("#route-detail").innerHTML = '<p class="small">适配器启用后，绑定关系将显示在这里。</p>';
+      $("#topo-caption").textContent = "无可显示的调用路径";
       return;
     }
-
-    const gateway = nodes.find((node) => node.key === "gateway");
-    const linkMarkup = [];
-    for (const node of nodes) {
-      if (!gateway || node.key === "gateway") continue;
-      linkMarkup.push(
-        `<line class="link" x1="${gateway.x}" y1="${gateway.y}" x2="${node.x}" y2="${node.y}"></line>`
-      );
-    }
-    const ap = nodes.find((node) => node.key === "aps");
-    const phones = nodes.find((node) => node.key === "phones");
-    if (ap && phones) {
-      linkMarkup.push(
-        `<line class="link link--dashed" x1="${ap.x}" y1="${ap.y}" x2="${phones.x}" y2="${phones.y}"></line>`
-      );
-    }
-    linkLayer.innerHTML = linkMarkup.join("");
-
-    const linkLabels = [];
-    const addLinkLabel = (fromKey, toKey, text) => {
-      const from = nodes.find((node) => node.key === fromKey);
-      const to = nodes.find((node) => node.key === toKey);
-      if (!from || !to) return;
-      const x = (from.x + to.x) / 2;
-      const y = (from.y + to.y) / 2 - 5;
-      linkLabels.push(
-        `<text class="link-label" x="${x}" y="${y}" text-anchor="middle">${esc(text)}</text>`
-      );
-    };
-    addLinkLabel("gateway", "nas", "Ethernet");
-    addLinkLabel("gateway", "printer", "Wi-Fi");
-    addLinkLabel("gateway", "esp32", "Wi-Fi 2.4G");
-    addLinkLabel("aps", "phones", "FTTR");
-    linkLayer.innerHTML += linkLabels.join("");
-
-    nodeLayer.innerHTML = nodes
-      .map((node, index) => {
-        const tierClass = TIER_CLASS[node.tier] || "tu";
-        const iconSize = node.r * 0.92;
-        const inner =
-          node.count !== null
-            ? `<text class="count" y="1">${node.count}</text>`
-            : `<use href="#icon-${node.icon}" x="${-iconSize / 2}" y="${-iconSize / 2}" width="${iconSize}" height="${iconSize}" class="icon"></use>`;
-        return `<g class="node ${tierClass}" data-node="${node.key}" tabindex="0" role="button"
-            aria-label="${esc(node.label)}" style="--i:${index}"
-            transform="translate(${node.x} ${node.y})">
-            <circle class="halo" r="${node.r + 11}"></circle>
-            <circle class="dot" r="${node.r}"></circle>
-            ${inner}
-            <text class="name" y="${node.r + 21}">${esc(node.label)}</text>
-            <text class="sub" y="${node.r + 35}">${esc(node.sub)}</text>
-          </g>`;
-      })
-      .join("");
-
-    const tierCount = new Set(state.devices.map(tierOf)).size;
-    $("#topo-caption").textContent =
-      `${state.devices.length} 台设备 · ${tierCount} 个档位 · 节点颜色表示档位`;
-    $("#topo-time").textContent = formatTime(state.inventory?.generated_at);
+    const connected = nodes.filter(item => item.available && item.count > 0);
+    $("#topo-links").innerHTML = `<path class="graph-link graph-entry" d="M 208 ${center} H 291"/>` + nodes.map((node, i) => {
+      const y = 26 + i * 66 + 25;
+      const active = node.available && node.count > 0;
+      return `<path data-route="${esc(node.key)}" class="graph-link ${active ? "" : "is-disabled"}" d="M 510 ${center} C 566 ${center}, 566 ${y}, 620 ${y}"/>
+        <path data-route="${esc(node.key)}" class="graph-link ${active ? "" : "is-disabled"}" d="M 826 ${y} H 908"/>`;
+    }).join("");
+    $("#topo-rings").innerHTML = `
+      <g transform="translate(24 ${center-69})"><rect class="graph-box" width="184" height="138" rx="12"/>
+        <text x="18" y="27" class="graph-heading">NORTHBOUND</text><text x="18" y="56" class="graph-title">Agent / Client</text>
+        <text x="18" y="80" class="graph-sub">统一的能力调用入口</text><rect x="18" y="99" width="148" height="24" rx="5" class="graph-chip"/>
+        <text x="30" y="115" class="graph-code">MCP · HTTP · CLI</text></g>
+      <g transform="translate(292 ${center-99})"><rect class="graph-box graph-box--hub" width="218" height="198" rx="13"/>
+        <text x="20" y="28" class="graph-heading">SOUTHBOUND RUNTIME</text><text x="20" y="59" class="graph-title">AccessHub</text>
+        <text x="20" y="84" class="graph-code">iot_call(device, capability)</text>
+        <path d="M 20 101 H 198" stroke="var(--rule)"/>
+        <text x="20" y="124" class="graph-sub">01  参数校验与能力匹配</text><text x="20" y="148" class="graph-sub">02  策略检查 · ${esc(state.access?.policy?.mode || "unknown")}</text>
+        <text x="20" y="172" class="graph-sub">03  执行分派与审计记录</text></g>
+      <text x="248" y="${center-13}" class="graph-sub" text-anchor="middle">调用</text>
+      <text x="400" y="${center+126}" class="graph-sub" text-anchor="middle">← 状态回读 / 设备主动上报</text>`;
+    $("#topo-nodes").innerHTML = nodes.map((node, i) => {
+      const y = 26 + i * 66;
+      const count = node.count;
+      const simulated = node.key === "sim" || (node.devices.length > 0 && node.devices.every(d => d.metadata?.simulated || d.metadata?.virtual));
+      const status = !node.enabled ? "未启用" : !node.available ? "驱动不可用" : count ? (simulated ? "模拟绑定" : "已绑定 · 待调用验证") : "尚未绑定设备";
+      return `<g class="node ${node.available ? "" : "is-disabled"}" data-node="${esc(node.key)}" tabindex="0" role="button" aria-pressed="false" aria-label="${esc(node.label)}，${count} 个绑定，${status}" transform="translate(620 ${y})">
+        <rect width="206" height="50" rx="8"/><text x="13" y="30" class="protocol-icon">${esc(node.icon)}</text>
+        <text x="55" y="21" class="name">${esc(node.label)}</text><text x="55" y="38" class="sub">${esc(node.sub)}</text><circle cx="190" cy="12" r="3" class="node-status"/></g>
+        <g transform="translate(912 ${y})"><text x="0" y="23" class="graph-device-count">${count.toString().padStart(2, "0")}</text><text x="34" y="23" class="graph-sub">${count ? "个设备" : "设备"}</text><text x="0" y="41" class="graph-device-note">${status}</text></g>`;
+    }).join("");
+    if (!nodes.some(node => node.key === state.selectedNode)) state.selectedNode = connected[0]?.key || nodes[0]?.key;
+    $("#topo-caption").textContent = `${nodes.length} 个协议适配器 · 逻辑绑定视图`;
     syncTopoSelection();
+    renderRouteDetail();
   }
 
   function syncTopoSelection() {
-    for (const node of document.querySelectorAll("#topo-nodes .node")) {
-      node.classList.toggle("is-selected", node.dataset.node === state.selectedNode);
-    }
+    document.querySelectorAll("#topo-nodes .node").forEach(node => {
+      const selected = node.dataset.node === state.selectedNode;
+      node.classList.toggle("is-selected", selected);
+      node.setAttribute("aria-pressed", String(selected));
+    });
+    document.querySelectorAll("[data-route]").forEach(path => {
+      path.classList.toggle("is-selected", path.dataset.route === state.selectedNode && !path.classList.contains("is-disabled"));
+    });
+  }
+
+  function renderRouteDetail() {
+    const node = state.topoNodes.find(item => item.key === state.selectedNode);
+    if (!node) return;
+    const caps = new Set(node.devices.flatMap(device => (device.capabilities || []).map(cap => cap.name)));
+    const selected = node.devices.find(device => device.device_id === state.selectedBinding);
+    $("#route-detail").innerHTML = `<div class="route-detail__head"><strong>${esc(node.label)}</strong><span>${node.count} 个绑定 · ${caps.size} 种能力</span><span class="badge">${node.enabled ? node.available ? "驱动就绪" : "驱动不可用" : "未启用"}</span></div>
+      <div class="bound-devices">${node.devices.length ? node.devices.map(device => `<button class="bound-device" type="button" data-binding="${esc(device.device_id)}" aria-pressed="${device.device_id === state.selectedBinding}">${esc(device.name)}<small>${esc(device.kind)}</small>${device.metadata?.simulated || device.metadata?.virtual ? '<small class="sim-tag">模拟</small>' : ''}</button>`).join("") : `<span class="small">${node.enabled ? "暂无绑定设备，可从右上角接入。" : "在配置中启用该适配器后，即可接入设备。"}</span>`}</div>
+      ${selected ? `<p class="binding-detail small"><span class="mono">${esc(selected.device_id)}</span> · ${esc(selected.protocol)} · 能力：${esc((selected.capabilities || []).map(cap => cap.name).join(" / "))}</p>` : ""}`;
   }
 
   function selectTopologyNode(node) {
     state.selectedNode = node.key;
-    state.tier = node.filter.tier || "all";
-    state.query = node.filter.query || "";
+    state.selectedBinding = null;
     syncTopoSelection();
-    renderTierFilters();
-    renderFleet();
-    const fleet = $(".fleet");
-    if (fleet) fleet.scrollIntoView({ behavior: "smooth", block: "start" });
+    renderRouteDetail();
+  }
+
+  function notify(message) {
+    const toast = $("#toast");
+    toast.textContent = message;
+    toast.hidden = false;
+    clearTimeout(notify.timer);
+    notify.timer = setTimeout(() => { toast.hidden = true; }, 4500);
   }
 
   function renderTierFilters() {
@@ -526,6 +429,7 @@
       renderSim();
     } catch (error) {
       console.error("sim action failed", error);
+      notify(`操作失败：${error.message}`);
     } finally {
       window.setTimeout(() => {
         const current = document.querySelector(`.sim-tile[data-id="${CSS.escape(deviceId)}"]`);
@@ -547,13 +451,17 @@
 
   async function refreshAccess() {
     try {
-      const [status, catalog] = await Promise.all([
+      const [status, catalog, bindings] = await Promise.all([
         api("/api/access/status"),
         api("/api/access/catalog"),
+        api("/api/access/devices"),
       ]);
       state.access = status || {};
       state.catalog = catalog || { tools: [] };
+      state.bindings = bindings.devices || [];
       renderRail();
+      renderStats();
+      renderTopology();
     } catch (error) {
       console.error("access refresh failed", error);
     }
@@ -570,6 +478,7 @@
       await refreshAccess();
     } catch (error) {
       console.error("decommission failed", error);
+      notify(`移除失败：${error.message}`);
     }
   }
 
@@ -697,6 +606,7 @@
   }
 
   async function runGoal(goal) {
+    if ($("#agent-run").disabled || state.composing) return;
     const button = $("#agent-run");
     const trace = $("#agent-trace");
     button.disabled = true;
@@ -739,6 +649,16 @@
   }
 
   function bindEvents() {
+    $("#agent-input").addEventListener("compositionstart", () => { state.composing = true; });
+    $("#agent-input").addEventListener("compositionend", () => { state.composing = false; });
+    $("#agent-input").addEventListener("keydown", event => {
+      if (event.isComposing || state.composing || event.keyCode === 229) return;
+      if (event.key === "Enter" && !event.shiftKey) {
+        event.preventDefault();
+        const goal = event.target.value.trim();
+        if (goal) runGoal(goal);
+      }
+    });
     $("#agent-run").addEventListener("click", () => {
       const goal = $("#agent-input").value.trim();
       if (goal) runGoal(goal);
@@ -746,6 +666,7 @@
 
     $("#agent-form").addEventListener("submit", (event) => {
       event.preventDefault();
+      if (state.composing) return;
       const goal = $("#agent-input").value.trim();
       if (goal) runGoal(goal);
     });
@@ -794,6 +715,22 @@
       if (data) selectTopologyNode(data);
     });
 
+    $("#topology-scope").addEventListener("click", event => {
+      const button = event.target.closest("[data-scope]");
+      if (!button) return;
+      state.scope = button.dataset.scope;
+      document.querySelectorAll("[data-scope]").forEach(item => item.setAttribute("aria-pressed", String(item === button)));
+      renderTopology();
+    });
+    $("#route-detail").addEventListener("click", event => {
+      const button = event.target.closest("[data-binding]");
+      if (!button) return;
+      state.selectedBinding = state.selectedBinding === button.dataset.binding ? null : button.dataset.binding;
+      renderRouteDetail();
+    });
+    document.querySelectorAll(".nav a").forEach(link => link.addEventListener("click", () => {
+      document.querySelectorAll(".nav a").forEach(item => item.classList.toggle("is-active", item === link));
+    }));
     $("#onboard-open").addEventListener("click", openOnboard);
     $("#onboard-close").addEventListener("click", () =>
       $("#onboard-dialog").close()
@@ -898,64 +835,110 @@
     }
   }
 
+  function renderEventList() {
+    const list = $("#event-list");
+    const open = new Set(Array.from(list.querySelectorAll("details[open]")).map(item => item.dataset.event));
+    const scroll = list.scrollTop;
+    const height = list.scrollHeight;
+    if (!state.events.length) return;
+    list.innerHTML = state.events.slice().reverse().map(event => {
+      const title = event.error || event.summary || event.goal || event.name || event.device_id || "运行时事件";
+      const time = String(event.ts || "").slice(11,19) || "—";
+      return `<details class="event-item ${event.ok === false ? "is-error" : ""}" data-event="${event.id}" ${open.has(String(event.id)) ? "open" : ""}><summary><span><span class="event-title">${esc(shorten(title, 50))}</span><span class="event-sub">${esc(event.type)}${event.capability ? ` · ${esc(event.capability)}` : ""}${event.simulated ? " · 模拟" : ""}</span></span><time>${esc(time)}</time></summary><pre>${esc(JSON.stringify(event, null, 2))}</pre></details>`;
+    }).join("");
+    if (scroll > 0) list.scrollTop = scroll + list.scrollHeight - height;
+  }
+
   function renderFlowEvent(event, animate) {
-    if (event.id) state.eventCount = Math.max(state.eventCount, event.id);
-    else state.eventCount += 1;
+    if (state.events.some(item => item.id === event.id)) return;
+    state.events.push(event);
+    state.events.sort((a,b) => a.id-b.id);
+    state.events = state.events.slice(-20);
+    state.eventCount = Math.max(state.eventCount, event.id || 0);
     $("#flow-last").textContent = flowLabel(event);
     $("#flow-last").title = flowLabel(event);
     $("#flow-count").textContent = `${state.eventCount} events`;
+    renderEventList();
     if (!animate) return;
-    const plane = event.plane === "southbound" ? "south" : "north";
-    const track = document.querySelector(
-      `.flowbar__track[data-track="${plane}"]`
-    );
-    if (!track) return;
-    track.classList.remove("is-active", "is-reverse");
-    if (event.direction === "up" || event.direction === "out") {
-      track.classList.add("is-reverse");
+    const adapter = event.adapter || state.bindings.find(device => device.device_id === event.device_id)?.adapter;
+    const incoming = event.direction === "up" || event.direction === "out";
+    if (adapter && event.ok !== false) {
+      document.querySelectorAll(".graph-link.is-live").forEach(path => path.classList.remove("is-live", "is-return"));
+      document.querySelectorAll("[data-route]").forEach(path => {
+        if (path.dataset.route === adapter) {
+          path.classList.add("is-live");
+          path.classList.toggle("is-return", incoming);
+        }
+      });
+      $(".graph-entry")?.classList.add("is-live");
+      $(".graph-entry")?.classList.toggle("is-return", incoming);
     }
-    void track.offsetWidth;
-    track.classList.add("is-active");
-    window.setTimeout(() => {
+    clearTimeout(state.pulseTimer);
+    state.pulseTimer = setTimeout(() => document.querySelectorAll(".graph-link.is-live").forEach(path => path.classList.remove("is-live", "is-return")), 1400);
+    const plane = event.plane === "southbound" ? "south" : "north";
+    const track = document.querySelector(`.flowbar__track[data-track="${plane}"]`);
+    if (track) {
       track.classList.remove("is-active", "is-reverse");
-    }, 800);
+      void track.offsetWidth;
+      track.classList.toggle("is-reverse", incoming);
+      track.classList.add("is-active");
+    }
+    if (["commission.result", "decommission.result"].includes(event.type)) refreshAccess();
   }
 
   function initEvents() {
-    api("/api/events/recent?limit=1")
-      .then((data) => {
-        const events = data.events || [];
-        if (events.length) renderFlowEvent(events[events.length - 1], false);
-      })
-      .catch(() => {});
-    if (!window.EventSource) return;
+    const status = $("#stream-status");
+    if (!window.EventSource) {
+      status.textContent = "浏览器不支持事件流";
+      return;
+    }
     const source = new EventSource("/api/events");
-    source.onmessage = (message) => {
-      try {
-        renderFlowEvent(JSON.parse(message.data), true);
-      } catch (_) {
-        /* ignore malformed SSE frames */
-      }
+    state.stream = source;
+    source.onopen = () => {
+      status.textContent = "事件流已连接";
+      status.className = "stream-status is-connected";
+      // Reconcile buffered events after reconnect; IDs prevent duplicate rows.
+      api("/api/events/recent?limit=20").then(data => {
+        const events = data.events || [];
+        const newest = events.at(-1)?.id || 0;
+        if (newest < state.eventCount) {
+          state.events = [];
+          state.eventCount = 0;
+          $("#event-list").innerHTML = '<p class="small">运行时已重启，等待新事件。</p>';
+          $("#flow-count").textContent = "0 events";
+        }
+        for (const event of events) renderFlowEvent(event, false);
+      }).catch(() => {});
     };
+    source.onerror = () => {
+      status.textContent = "事件流重连中";
+      status.className = "stream-status is-error";
+    };
+    source.onmessage = message => {
+      try { renderFlowEvent(JSON.parse(message.data), true); }
+      catch (error) { console.error("event render failed", error); }
+    };
+    window.addEventListener("pagehide", () => source.close());
   }
 
   async function init() {
     bindEvents();
     renderSuggestions();
-    initEvents();
     try {
-      const [inventory, deep, sim, access, catalog] = await Promise.all([
+      const [inventory, deep, sim, access, catalog, bindings] = await Promise.all([
         api("/api/inventory").catch(() => ({})),
         api("/api/deep_scan").catch(() => ({})),
         api("/api/sim/devices").catch(() => ({ devices: [] })),
-        api("/api/access/status").catch(() => ({})),
-        api("/api/access/catalog").catch(() => ({ tools: [] })),
+        api("/api/access/status").catch(() => null),
+        api("/api/access/catalog").catch(() => null),
+        api("/api/access/devices").catch(() => ({ devices: [] })),
       ]);
       state.inventory = inventory || {};
       state.devices = state.inventory.devices || [];
       state.deep = deep || {};
       state.sim = sim.devices || [];
-      state.access = access || {};
+      state.access = access;
+      state.bindings = bindings.devices || [];
       state.catalog = catalog || { tools: [] };
       renderStats();
       renderRail();
@@ -963,6 +946,7 @@
       renderTierFilters();
       renderFleet();
       renderSim();
+      initEvents();
       window.setInterval(pollSim, 4000);
     } catch (error) {
       console.error("init failed", error);
