@@ -143,6 +143,100 @@ class RemoteRuntime:
             {"session_id": session_id, "endpoint_id": endpoint_id},
         )
 
+    def skills(self) -> dict[str, Any]:
+        return self._request("GET", "/api/skills")
+
+    def skill_status(self) -> dict[str, Any]:
+        return self._request("GET", "/api/skills/status")
+
+    def skill_describe(self, skill_id: str) -> dict[str, Any]:
+        encoded = urllib.parse.quote(skill_id, safe="")
+        return self._request("GET", f"/api/skills/{encoded}")
+
+    def skill_run(
+        self,
+        skill_id: str,
+        confirm: bool = False,
+        force: bool = False,
+        mode: str = "supervised",
+    ) -> dict[str, Any]:
+        encoded = urllib.parse.quote(skill_id, safe="")
+        return self._request(
+            "POST",
+            f"/api/skills/{encoded}/run",
+            {"confirm": confirm, "force": force, "mode": mode},
+        )
+
+    def observations(
+        self,
+        limit: int = 50,
+        since: int = 0,
+        mission_id: str = "",
+        device_id: str = "",
+    ) -> list[dict[str, Any]]:
+        query = urllib.parse.urlencode(
+            {
+                "limit": limit,
+                "since": since,
+                "mission_id": mission_id,
+                "device_id": device_id,
+            }
+        )
+        payload = self._request("GET", f"/api/observations?{query}")
+        return list(payload.get("observations") or [])
+
+    def observation(self, observation_id: int) -> dict[str, Any]:
+        return self._request("GET", f"/api/observations/{int(observation_id)}")
+
+    def situation(self, mission_id: str = "", limit: int = 20) -> dict[str, Any]:
+        query = urllib.parse.urlencode({"mission_id": mission_id, "limit": limit})
+        return self._request("GET", f"/api/situation?{query}")
+
+    def missions(self, limit: int = 50, status: str = "") -> list[dict[str, Any]]:
+        query = urllib.parse.urlencode({"limit": limit, "status": status})
+        payload = self._request("GET", f"/api/missions?{query}")
+        return list(payload.get("missions") or [])
+
+    def mission(self, mission_id: str) -> dict[str, Any]:
+        encoded = urllib.parse.quote(mission_id, safe="")
+        return self._request("GET", f"/api/missions/{encoded}")
+
+    def mission_create(
+        self,
+        goal: str,
+        actions: list[dict[str, Any]],
+        verify: Any = None,
+        requires_approval: bool = True,
+        metadata: dict[str, Any] | None = None,
+        mission_id: str = "",
+    ) -> dict[str, Any]:
+        return self._request(
+            "POST",
+            "/api/missions",
+            {
+                "goal": goal,
+                "actions": actions,
+                "verify": verify,
+                "requires_approval": requires_approval,
+                "metadata": metadata or {},
+                "mission_id": mission_id,
+            },
+        )
+
+    def mission_control(
+        self,
+        mission_id: str,
+        action: str,
+        actor: str = "owner",
+        confirm: bool = False,
+    ) -> dict[str, Any]:
+        encoded = urllib.parse.quote(mission_id, safe="")
+        return self._request(
+            "POST",
+            f"/api/missions/{encoded}/{action}",
+            {"actor": actor, "confirm": confirm},
+        )
+
     def intent(self, goal: str) -> dict[str, Any]:
         return self._request("POST", "/api/northbound/intent", {"goal": goal})
 

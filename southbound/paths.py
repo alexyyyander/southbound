@@ -21,6 +21,7 @@ CONFIG_DIR = Path(
     os.environ.get("IOT_LAB_CONFIG_DIR", PROJECT_ROOT / "config")
 ).resolve()
 WEB_DIR = PACKAGE_DIR / "web"
+SKILLS_DIR = PROJECT_ROOT / "skills"
 DOCS_DIR = PROJECT_ROOT / "docs"
 AUDIT_FILE = DATA_DIR / "audit.jsonl"
 

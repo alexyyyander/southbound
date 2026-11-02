@@ -1,5 +1,9 @@
 # 文档索引
 
+- [相关研究与竞品](RELATED_WORK.md) — agentic IoT、Ori、AssetOpsBench、WoT/IBN、MCP 安全
+- [Observations 与 Situation](OBSERVATIONS.md) — 事件归一化、observation store、situation snapshot
+- [Missions](MISSIONS.md) — proposed/approved/running/verified 状态机、审批与回读
+- [Edge Skills 与硬件条件](EDGE_SKILLS.md) — skill 合约、T0–T3 硬件、电源/网络/执行器/安全/隐私
 - [架构拆解图](ARCHITECTURE_BREAKDOWN.md) — Agent harness、MCP、Southbound core、adapters、物理设备与部署 profile
 - [共享 Runtime Service](RUNTIME_SERVICE.md) — 一个设备图供 Dashboard / MCP / CLI 共用，远程调用与安全边界
 - [多硬件交互](INTERACTION.md) — 端点、会话、模态路由、跨端 handoff 与 `/interaction` 面板

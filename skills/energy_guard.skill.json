@@ -1,0 +1,69 @@
+{
+  "schema_version": 1,
+  "id": "energy_guard",
+  "name": "Energy Guard",
+  "version": "0.1.0",
+  "description": "Detect sustained overcurrent and propose a protected-load cutoff; hard physical action needs human approval.",
+  "status": "planned",
+  "edge_tier": "T1-T2",
+  "action_tier": "C",
+  "hardware": {
+    "min_ram_mb": 128,
+    "radios": ["Modbus RTU", "Ethernet", "Wi-Fi"],
+    "sensors": ["energy meter", "current transformer", "temperature probe"],
+    "actuators": ["protected relay/contactor"],
+    "requires_local_broker": false,
+    "offline_capable": true,
+    "safety_circuit": "external"
+  },
+  "requires": {
+    "device_kinds": ["energy_meter", "relay"],
+    "capabilities": ["read", "turn_off"],
+    "signals": ["current_a", "voltage_v", "temperature_c"]
+  },
+  "trigger": {
+    "device_id": "main_meter",
+    "field": "current_a",
+    "op": ">",
+    "value": 40,
+    "for_s": 30
+  },
+  "guard": {
+    "cooldown_s": 600,
+    "max_actions_per_hour": 2,
+    "hysteresis": {
+      "clear_below": 32
+    },
+    "manual_override": true,
+    "require_human": true
+  },
+  "actions": [
+    {
+      "device_id": "protected_load_relay",
+      "capability": "turn_off",
+      "arguments": {}
+    }
+  ],
+  "verify": {
+    "device_id": "protected_load_relay",
+    "field": "on",
+    "equals": false,
+    "within_s": 5
+  },
+  "approval": "human",
+  "fallback": "notify_agent_and_human",
+  "privacy": {
+    "camera": false,
+    "microphone": false,
+    "retention": "audit_only"
+  },
+  "telemetry": ["signal", "automation.proposed", "command", "state", "verify"],
+  "failure_modes": [
+    "meter stale",
+    "relay stuck closed",
+    "contactor welded",
+    "human override",
+    "power loss during actuation"
+  ],
+  "safety_note": "Do not implement D-tier safety cutoff in a normal skill. Use a certified hardware safety loop and physical emergency stop."
+}

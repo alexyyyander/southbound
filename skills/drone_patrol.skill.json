@@ -1,0 +1,74 @@
+{
+  "schema_version": 1,
+  "id": "drone_patrol",
+  "name": "Drone Patrol",
+  "version": "0.1.0",
+  "description": "A supervised indoor waypoint patrol: take off, visit defined points, capture observations, return and land.",
+  "status": "planned",
+  "edge_tier": "T3",
+  "action_tier": "C",
+  "hardware": {
+    "min_ram_mb": 2048,
+    "radios": ["Wi-Fi", "MAVLink telemetry", "UWB optional"],
+    "sensors": ["camera", "rangefinder", "IMU"],
+    "actuators": ["drone flight controller"],
+    "requires_local_broker": false,
+    "offline_capable": true,
+    "prop_guards": true,
+    "indoor_positioning": ["VIO", "UWB", "AprilTag"],
+    "geofence_required": true,
+    "manual_kill_switch": true
+  },
+  "requires": {
+    "device_kinds": ["drone"],
+    "capabilities": ["takeoff", "goto", "capture", "return_home", "land"],
+    "signals": ["battery", "position", "obstacle_distance"]
+  },
+  "trigger": {
+    "command": "patrol",
+    "operator_present": true,
+    "geofence_armed": true
+  },
+  "guard": {
+    "cooldown_s": 600,
+    "max_actions_per_hour": 2,
+    "manual_override": true,
+    "require_human": true,
+    "battery_min": 30,
+    "max_altitude_m": 1.8,
+    "max_speed_mps": 0.6,
+    "geofence": "room_bounds",
+    "people_in_area": false
+  },
+  "actions": [
+    {"device_id": "drone:lab", "capability": "takeoff", "arguments": {}},
+    {"device_id": "drone:lab", "capability": "goto", "arguments": {"x": 2.0, "y": 3.0, "z": 1.0, "yaw": 0.0}},
+    {"device_id": "drone:lab", "capability": "capture", "arguments": {}},
+    {"device_id": "drone:lab", "capability": "return_home", "arguments": {}},
+    {"device_id": "drone:lab", "capability": "land", "arguments": {}}
+  ],
+  "verify": {
+    "device_id": "drone:lab",
+    "field": "landed",
+    "equals": true,
+    "within_s": 30
+  },
+  "approval": "human",
+  "fallback": "return_home_then_land",
+  "privacy": {
+    "camera": true,
+    "microphone": false,
+    "retention": "local_7d",
+    "raw_video_to_model": false
+  },
+  "telemetry": ["telemetry", "command", "state", "verify", "agent.notice"],
+  "failure_modes": [
+    "battery low",
+    "positioning drift",
+    "prop guard impact",
+    "geofence breach",
+    "operator absent",
+    "communications loss"
+  ],
+  "safety_note": "Never run autonomous flight around people or pets. Use a human pilot, prop guards, geofence, and hardware kill switch."
+}

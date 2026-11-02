@@ -6,8 +6,40 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.13.0] - 2026-11-02
+
 ### Added
 
+- **Observation layer**: `ObservationStore` and `ObservationService` project
+  device, presence, skill, and automation events into compact, durable
+  observations; `GET /api/observations`, `GET /api/observations/<id>`,
+  `GET /api/situation`, MCP `iot_observe` / `iot_observations`.
+- **Mission layer**: `MissionStore` and `MissionService` implement
+  `proposed → approved → running → verified / failed / cancelled`, explicit
+  approval, action execution through AccessHub, read-back verification, and
+  mission observations.
+- **Mission MCP tools**: `iot_missions`, `iot_mission_create`,
+  `iot_mission_status`, `iot_mission_control`.
+- **Mission HTTP API** and `RemoteRuntime` observation/mission methods.
+- Tests for observation projection/situation and mission approval/run/verify/
+  cancel/failure (152 tests total).
+
+## [0.12.0] - 2026-11-02
+
+### Added
+
+- **Skill runtime**: `SkillRegistry` validates versioned manifests; `SkillRunner`
+  evaluates state/event triggers, `for_s`, cooldowns, hourly limits, time
+  windows, action tiers, shadow/supervised/autonomous modes, read-back
+  verification, fallback notices, and AccessHub-only execution.
+- **MCP skill tools**: `iot_skills`, `iot_skill_describe`, `iot_skill_run`,
+  `iot_skill_status`.
+- **HTTP/remote skill surface** and `RemoteRuntime` skill methods for the shared
+  runtime service.
+- **CLI**: `southbound skills` and `southbound skill <id>`.
+- Tests for manifest validation, forbidden action payloads, trigger/shadow,
+  cooldown, confirm gating, planned-skill blocking, status, and MCP exposure
+  (140 tests total).
 - **Durable LAN graph**: SQLite-backed device identities, control scope,
   authorization, provenance, capabilities, cached state, and last-seen times.
   Inventory, deep scan, commissioning records, and adapter bindings merge into

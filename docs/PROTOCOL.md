@@ -1,6 +1,6 @@
 # Protocol & API
 
-版本：`0.11.0`。这是一份面向实现的协议说明：北向 agent 如何调用 Southbound，南向 adapter 如何执行，事件长什么样。
+版本：`0.13.0`。这是一份面向实现的协议说明：北向 agent 如何调用 Southbound，南向 adapter 如何执行，事件长什么样。
 
 ## 1. 两个平面
 
@@ -36,6 +36,20 @@ Wi-Fi / Zigbee / Matter / ESPHome / MQTT
 | GET | `/api/deep_scan` | 最近端口/服务扫描 |
 | GET | `/api/graph` | 持久化 LAN 图：身份、控制范围、状态、来源 |
 | GET | `/api/graph/devices/<device_id>` | 单个 LAN 图设备，支持 device_id 别名 |
+| GET | `/api/skills` | skill manifest 与当前 readiness |
+| GET | `/api/skills/status` | SkillRunner 模式、运行状态、最近评估 |
+| GET | `/api/skills/<skill_id>` | 单个 skill manifest 与 preflight |
+| POST | `/api/skills/<skill_id>/run` | 显式运行 skill（受 policy/confirm 约束） |
+| POST | `/api/skills/mode` | 切换 shadow / supervised / autonomous runner |
+| GET | `/api/observations` | 按 mission/device/since 查询结构化 observations |
+| GET | `/api/observations/<id>` | 单条 observation |
+| GET | `/api/situation` | 设备状态 + 最近 observation + uncertainties |
+| GET | `/api/missions` | mission 列表 |
+| GET | `/api/missions/<id>` | 单个 mission |
+| POST | `/api/missions` | 创建 proposed/approved mission |
+| POST | `/api/missions/<id>/approve` | 审批 mission（confirm=true） |
+| POST | `/api/missions/<id>/run` | 执行已批准 mission |
+| POST | `/api/missions/<id>/cancel` | 取消未执行 mission |
 | GET | `/api/state` | LAN 图中所有设备的最新缓存状态 |
 | GET | `/api/interaction/endpoints` | 多硬件交互端点与模态 |
 | POST | `/api/interaction/endpoints` | 注册交互端点（默认 unverified） |
@@ -227,6 +241,14 @@ data: {"id":12,"ts":"2026-10-26T17:00:00+08:00","type":"command","plane":"southb
 | `commission.result` | northbound | 接入完成，能力就绪 |
 | `decommission` | southbound | 撤销接入 |
 | `decommission.result` | northbound | 撤销完成 |
+| `observation.recorded` | northbound | 结构化 observation 已写入 |
+| `mission.created` | northbound | mission 已创建 |
+| `mission.approved` | northbound | mission 已审批 |
+| `mission.started` | northbound | mission 开始执行 |
+| `mission.action` | northbound | mission 单步动作结果 |
+| `mission.verified` | northbound | mission 验证通过 |
+| `mission.failed` | northbound | mission 失败 |
+| `mission.cancelled` | northbound | mission 取消 |
 | `presence` | southbound | 房间 avatar/区域信号 |
 | `automation.mode` | northbound | 场景自动模式开关 |
 | `automation.proposed` | northbound | 规则命中，准备执行 |
@@ -294,9 +316,12 @@ stdio MCP 工具：
 - 交互端点：`interaction_endpoints`、`interaction_input`
 - 模拟器：`sim_devices`、`sim_action`、`sim_goal`
 - 接入层：`iot_hub_status`、`iot_devices_list`、`iot_device_describe`、`iot_tool_catalog`、`iot_call`
+- Skills：`iot_skills`、`iot_skill_describe`、`iot_skill_run`、`iot_skill_status`
+- Observations：`iot_observe`、`iot_observations`
+- Missions：`iot_missions`、`iot_mission_create`、`iot_mission_status`、`iot_mission_control`
 - 受控接入：`iot_commission`、`iot_decommission`
 
-`iot_call` 的 `arguments` 必须符合 Capability schema；`confirm` 用于高风险动作。`iot_commission` 的 `confirm` 默认 false。
+`iot_call` 的 `arguments` 必须符合 Capability schema；`confirm` 用于高风险动作。`iot_commission` 的 `confirm` 默认 false。`iot_skill_run` 的 `mode` 支持 `shadow` / `supervised` / `autonomous`；C 级或人工审批 skill 必须 `confirm=true`。
 
 ## 6. 策略与兼容性
 

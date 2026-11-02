@@ -37,10 +37,20 @@ from .access.errors import AccessError
 from .event_store import EventStore
 from .graph import LANGraph
 from .interaction import InteractionService, InteractionStore
-from .paths import DATA_DIR, WEB_DIR
+from .missions import (
+    MissionDenied,
+    MissionError,
+    MissionNotFound,
+    MissionService,
+    MissionStateError,
+    MissionStore,
+)
+from .observations import ObservationService, ObservationStore
+from .paths import DATA_DIR, WEB_DIR, SKILLS_DIR
 from .runtime import EventBus, SouthboundRuntime
 from .scene import SceneController
 from .service_auth import is_authorized
+from .skills import SkillRegistry, SkillRunner
 
 STATE_DB = DATA_DIR / "lan_state.sqlite3"
 GRAPH = LANGraph(STATE_DB)
@@ -52,6 +62,16 @@ RUNTIME = SouthboundRuntime(
 SIM = RUNTIME.simulator
 HUB = RUNTIME.hub
 SCENE = SceneController(RUNTIME)
+SKILLS = SkillRegistry.from_directory(SKILLS_DIR)
+SKILL_RUNNER = SkillRunner(RUNTIME, SKILLS, mode="shadow")
+OBSERVATIONS = ObservationService(
+    RUNTIME, ObservationStore(DATA_DIR / "observations.sqlite3")
+)
+MISSIONS = MissionService(
+    RUNTIME,
+    OBSERVATIONS,
+    MissionStore(DATA_DIR / "missions.sqlite3"),
+)
 INTERACTION = InteractionService(
     RUNTIME,
     InteractionStore(DATA_DIR / "interaction.sqlite3"),
@@ -74,7 +94,7 @@ RUNTIME.ingest_lan(_load_json("inventory.json"), _load_json("deep_scan.json"))
 
 
 class Handler(BaseHTTPRequestHandler):
-    server_version = "SouthboundDemo/0.11"
+    server_version = "SouthboundDemo/0.13"
 
     def log_message(self, fmt: str, *args) -> None:  # keep stdout clean
         print(f"[viz] {self.address_string()} {fmt % args}", flush=True)
@@ -183,6 +203,97 @@ class Handler(BaseHTTPRequestHandler):
             return
         if path == "/api/scene/state":
             self._json(SCENE.snapshot())
+            return
+        if path == "/api/observations":
+            query = parse_qs(parsed.query)
+            try:
+                limit = int(query.get("limit", ["50"])[0] or 50)
+                since = int(query.get("since", ["0"])[0] or 0)
+            except ValueError:
+                limit, since = 50, 0
+            self._json(
+                {
+                    "observations": OBSERVATIONS.observations(
+                        limit=limit,
+                        since=since,
+                        mission_id=query.get("mission_id", [""])[0],
+                        device_id=query.get("device_id", [""])[0],
+                    )
+                }
+            )
+            return
+        if path.startswith("/api/observations/"):
+            try:
+                observation_id = int(
+                    unquote(path[len("/api/observations/") :]).strip("/")
+                )
+            except ValueError:
+                self._json({"error": "invalid observation id"}, status=400)
+                return
+            observation = OBSERVATIONS.get(observation_id)
+            if observation is None:
+                self._json({"error": "unknown observation"}, status=404)
+            else:
+                self._json(observation)
+            return
+        if path == "/api/situation":
+            query = parse_qs(parsed.query)
+            try:
+                limit = int(query.get("limit", ["20"])[0] or 20)
+            except ValueError:
+                limit = 20
+            self._json(
+                OBSERVATIONS.situation(
+                    mission_id=query.get("mission_id", [""])[0],
+                    limit=limit,
+                )
+            )
+            return
+        if path == "/api/missions":
+            query = parse_qs(parsed.query)
+            try:
+                limit = int(query.get("limit", ["50"])[0] or 50)
+            except ValueError:
+                limit = 50
+            self._json(
+                {
+                    "missions": MISSIONS.list(
+                        limit=limit, status=query.get("status", [""])[0]
+                    )
+                }
+            )
+            return
+        if path.startswith("/api/missions/"):
+            mission_id = unquote(path[len("/api/missions/") :]).strip("/")
+            if "/" in mission_id:
+                self._json({"error": "invalid mission id"}, status=400)
+                return
+            try:
+                self._json(MISSIONS.get(mission_id))
+            except MissionNotFound as exc:
+                self._json({"error": str(exc)}, status=404)
+            return
+        if path == "/api/skills/status":
+            self._json(SKILL_RUNNER.status())
+            return
+        if path == "/api/skills":
+            self._json(SKILL_RUNNER.status())
+            return
+        if path.startswith("/api/skills/"):
+            skill_id = unquote(path[len("/api/skills/") :]).strip("/")
+            if not skill_id or "/" in skill_id:
+                self._json({"error": "invalid skill id"}, status=400)
+                return
+            try:
+                self._json(
+                    {
+                        "ok": True,
+                        "skill": SKILLS.get(skill_id),
+                        "preflight": SKILL_RUNNER.preflight(skill_id),
+                    }
+                )
+            except Exception as exc:
+                self._json({"ok": False, "error": str(exc)}, status=404)
             return
         if path in ("/scene", "/scene.html"):
             self._static("/scene.html")
@@ -309,6 +420,72 @@ class Handler(BaseHTTPRequestHandler):
             return
         if path == "/api/scene/reset":
             self._json(SCENE.reset())
+            return
+        if path == "/api/missions":
+            try:
+                mission = MISSIONS.create(
+                    goal=str(body.get("goal", "")),
+                    actions=body.get("actions"),
+                    verify=body.get("verify"),
+                    requires_approval=bool(body.get("requires_approval", True)),
+                    metadata=body.get("metadata") or {},
+                    mission_id=str(body.get("mission_id", "")),
+                )
+            except MissionError as exc:
+                self._json({"ok": False, "error": str(exc)}, status=400)
+                return
+            self._json(mission)
+            return
+        if path.startswith("/api/missions/") and path.endswith(
+            ("/approve", "/run", "/cancel")
+        ):
+            suffix = path.rsplit("/", 1)[-1]
+            mission_id = unquote(path[len("/api/missions/") : -len(suffix) - 1]).strip(
+                "/"
+            )
+            try:
+                if suffix == "approve":
+                    result = MISSIONS.approve(
+                        mission_id,
+                        actor=str(body.get("actor", "owner")),
+                        confirm=bool(body.get("confirm", False)),
+                    )
+                elif suffix == "run":
+                    result = MISSIONS.run(mission_id)
+                else:
+                    result = MISSIONS.cancel(
+                        mission_id, actor=str(body.get("actor", "owner"))
+                    )
+            except MissionNotFound as exc:
+                self._json({"ok": False, "error": str(exc)}, status=404)
+                return
+            except (MissionDenied, MissionStateError, MissionError) as exc:
+                self._json({"ok": False, "error": str(exc)}, status=400)
+                return
+            self._json(result)
+            return
+        if path == "/api/skills/mode":
+            try:
+                self._json(SKILL_RUNNER.set_mode(str(body.get("mode", "shadow"))))
+            except (TypeError, ValueError) as exc:
+                self._json({"ok": False, "error": str(exc)}, status=400)
+            return
+        if path.startswith("/api/skills/") and path.endswith("/run"):
+            skill_id = unquote(path[len("/api/skills/") : -len("/run")]).strip("/")
+            if not skill_id or "/" in skill_id:
+                self._json({"error": "invalid skill id"}, status=400)
+                return
+            try:
+                result = SKILL_RUNNER.run(
+                    skill_id,
+                    confirm=bool(body.get("confirm", False)),
+                    force=bool(body.get("force", False)),
+                    mode=str(body.get("mode", "supervised")),
+                )
+            except (ValueError, KeyError) as exc:
+                self._json({"ok": False, "error": str(exc)}, status=400)
+                return
+            self._json(result, status=200 if result.get("ok") else 400)
             return
         if path == "/api/interaction/endpoints":
             try:
@@ -482,12 +659,17 @@ def serve(
         print("Runtime API token required for non-loopback clients", flush=True)
     if open_browser:
         webbrowser.open(url)
+    OBSERVATIONS.start()
+    SKILL_RUNNER.start()
     try:
         server.serve_forever()
     except KeyboardInterrupt:
         print("\nstopped", flush=True)
     finally:
         server.server_close()
+        SKILL_RUNNER.stop()
+        OBSERVATIONS.close()
+        MISSIONS.close()
         INTERACTION.close()
         RUNTIME.close()
 

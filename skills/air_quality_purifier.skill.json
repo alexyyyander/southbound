@@ -1,0 +1,70 @@
+{
+  "schema_version": 1,
+  "id": "air_quality_purifier",
+  "name": "Air Quality Purifier",
+  "version": "0.1.0",
+  "description": "Start and boost a purifier when PM2.5 stays high; stop or return to auto after hysteresis.",
+  "status": "simulated",
+  "edge_tier": "T1-T2",
+  "action_tier": "B",
+  "hardware": {
+    "min_ram_mb": 64,
+    "radios": ["Wi-Fi", "Zigbee"],
+    "sensors": ["PM2.5 sensor", "purifier onboard sensor"],
+    "actuators": ["purifier"],
+    "requires_local_broker": true,
+    "offline_capable": true
+  },
+  "requires": {
+    "device_kinds": ["sensor", "purifier"],
+    "capabilities": ["read", "turn_on", "turn_off", "set_mode"],
+    "signals": ["pm25"]
+  },
+  "trigger": {
+    "device_id": "bedroom_purifier",
+    "field": "pm25",
+    "op": ">",
+    "value": 35,
+    "for_s": 120
+  },
+  "guard": {
+    "cooldown_s": 300,
+    "max_actions_per_hour": 6,
+    "hysteresis": {
+      "clear_below": 28
+    },
+    "manual_override": true
+  },
+  "actions": [
+    {
+      "device_id": "bedroom_purifier",
+      "capability": "turn_on",
+      "arguments": {}
+    },
+    {
+      "device_id": "bedroom_purifier",
+      "capability": "set_mode",
+      "arguments": {"mode": "turbo"}
+    }
+  ],
+  "verify": {
+    "device_id": "bedroom_purifier",
+    "field": "mode",
+    "equals": "turbo",
+    "within_s": 10
+  },
+  "approval": "none",
+  "fallback": "notify_agent",
+  "privacy": {
+    "camera": false,
+    "microphone": false,
+    "retention": "none"
+  },
+  "telemetry": ["signal", "command", "state", "verify"],
+  "failure_modes": [
+    "sensor spike from cooking",
+    "window opened",
+    "purifier filter expired",
+    "mode readback mismatch"
+  ]
+}

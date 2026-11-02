@@ -28,6 +28,17 @@ class CliParserTest(unittest.TestCase):
         args = build_parser().parse_args(["access"])
         self.assertEqual(args.command, "access")
 
+    def test_skills_commands(self) -> None:
+        args = build_parser().parse_args(["skills", "--json"])
+        self.assertEqual(args.command, "skills")
+        self.assertTrue(args.json)
+        args = build_parser().parse_args(
+            ["skill", "presence_lighting", "--force", "--mode", "supervised"]
+        )
+        self.assertEqual(args.skill_id, "presence_lighting")
+        self.assertTrue(args.force)
+        self.assertEqual(args.mode, "supervised")
+
     def test_graph_command(self) -> None:
         args = build_parser().parse_args(["graph", "--device", "mqtt:hall-lamp"])
         self.assertEqual(args.command, "graph")

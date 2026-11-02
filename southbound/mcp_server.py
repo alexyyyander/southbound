@@ -36,6 +36,7 @@ import io
 import json
 import os
 import sys
+from typing import Any
 
 from . import agent
 from . import deep_scan as deep
@@ -49,8 +50,11 @@ from .discover import DEFAULT_OUT, discover, print_inventory
 from .event_store import EventStore
 from .graph import LANGraph
 from .interaction import InteractionService, InteractionStore
-from .paths import DATA_DIR
+from .missions import MissionError, MissionNotFound, MissionService, MissionStore
+from .observations import ObservationService, ObservationStore
+from .paths import DATA_DIR, SKILLS_DIR
 from .runtime import EventBus, SouthboundRuntime
+from .skills import SkillRegistry, SkillRunner
 
 REMOTE_ENV = "SOUTHBOUND_REMOTE_URL"
 REMOTE_TOKEN_ENV = "SOUTHBOUND_REMOTE_TOKEN"
@@ -77,6 +81,8 @@ def _make_runtime() -> SouthboundRuntime | RemoteRuntime:
 def configure(remote: str | None = None, token: str | None = None) -> None:
     """Switch the MCP process between embedded and shared runtime mode."""
     global RUNTIME, SIM, HUB
+    _stop_skill_runner()
+    _stop_observation_services()
     previous = RUNTIME
     if remote:
         RUNTIME = RemoteRuntime(
@@ -95,9 +101,59 @@ def configure(remote: str | None = None, token: str | None = None) -> None:
 RUNTIME: SouthboundRuntime | RemoteRuntime = _make_runtime()
 SIM = getattr(RUNTIME, "simulator", None)
 HUB = getattr(RUNTIME, "hub", None)
+SKILLS = SkillRegistry.from_directory(SKILLS_DIR)
+SKILL_RUNNER: SkillRunner | None = None
+OBSERVATIONS: ObservationService | None = None
+MISSIONS: MissionService | None = None
+
+
+def _stop_skill_runner() -> None:
+    global SKILL_RUNNER
+    if SKILL_RUNNER is not None:
+        SKILL_RUNNER.stop()
+        SKILL_RUNNER = None
+
+
+def _stop_observation_services() -> None:
+    global OBSERVATIONS, MISSIONS
+    if MISSIONS is not None:
+        MISSIONS.close()
+        MISSIONS = None
+    if OBSERVATIONS is not None:
+        OBSERVATIONS.close()
+        OBSERVATIONS = None
+
+
+def _services() -> tuple[ObservationService, MissionService] | None:
+    global OBSERVATIONS, MISSIONS
+    if isinstance(RUNTIME, RemoteRuntime):
+        return None
+    if OBSERVATIONS is None:
+        OBSERVATIONS = ObservationService(
+            RUNTIME, ObservationStore(DATA_DIR / "observations.sqlite3")
+        )
+        OBSERVATIONS.start()
+        MISSIONS = MissionService(
+            RUNTIME,
+            OBSERVATIONS,
+            MissionStore(DATA_DIR / "missions.sqlite3"),
+        )
+    return OBSERVATIONS, MISSIONS  # type: ignore[return-value]
+
+
+def _skill_runner() -> SkillRunner | None:
+    """Return the local skill runner; remote mode is served by the service."""
+    global SKILL_RUNNER
+    if isinstance(RUNTIME, RemoteRuntime):
+        return None
+    if SKILL_RUNNER is None:
+        SKILL_RUNNER = SkillRunner(RUNTIME, SKILLS, mode="shadow")
+        SKILL_RUNNER.start()
+    return SKILL_RUNNER
+
 
 SERVER_NAME = "southbound"
-SERVER_VERSION = "0.11.0"
+SERVER_VERSION = "0.13.0"
 DEFAULT_PROTOCOL = "2024-11-05"
 
 TOOLS = [
@@ -416,6 +472,164 @@ TOOLS = [
             "additionalProperties": False,
         },
     },
+    {
+        "name": "iot_skills",
+        "description": (
+            "List versioned edge skills with status, action tier, and current "
+            "hardware/policy availability."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "properties": {},
+            "additionalProperties": False,
+        },
+    },
+    {
+        "name": "iot_skill_describe",
+        "description": "Describe one skill manifest and its preflight status.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {"skill_id": {"type": "string"}},
+            "required": ["skill_id"],
+            "additionalProperties": False,
+        },
+    },
+    {
+        "name": "iot_skill_run",
+        "description": (
+            "Run one skill through the AccessHub. Shadow mode only previews; "
+            "C-tier/human-approval skills require confirm=true."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "skill_id": {"type": "string"},
+                "confirm": {"type": "boolean", "default": False},
+                "force": {
+                    "type": "boolean",
+                    "default": False,
+                    "description": "Run even when the current trigger is not matched; for deliberate tests.",
+                },
+                "mode": {
+                    "type": "string",
+                    "enum": ["shadow", "supervised", "autonomous"],
+                    "default": "supervised",
+                },
+            },
+            "required": ["skill_id"],
+            "additionalProperties": False,
+        },
+    },
+    {
+        "name": "iot_skill_status",
+        "description": "Show skill runner mode, recent evaluations, and per-skill state.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {},
+            "additionalProperties": False,
+        },
+    },
+    {
+        "name": "iot_observations",
+        "description": "List structured observations derived from device, presence, skill, and mission events.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "mission_id": {"type": "string"},
+                "device_id": {"type": "string"},
+                "since": {"type": "integer", "default": 0},
+                "limit": {"type": "integer", "default": 50},
+            },
+            "additionalProperties": False,
+        },
+    },
+    {
+        "name": "iot_observe",
+        "description": "Return a situation snapshot: device state, recent observations, and uncertainties.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "mission_id": {"type": "string"},
+                "limit": {"type": "integer", "default": 20},
+            },
+            "additionalProperties": False,
+        },
+    },
+    {
+        "name": "iot_missions",
+        "description": "List durable missions and their state.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "status": {"type": "string"},
+                "limit": {"type": "integer", "default": 50},
+            },
+            "additionalProperties": False,
+        },
+    },
+    {
+        "name": "iot_mission_create",
+        "description": "Create a proposed mission. By default it requires explicit approval before running.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "goal": {"type": "string"},
+                "actions": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "device_id": {"type": "string"},
+                            "capability": {"type": "string"},
+                            "arguments": {"type": "object"},
+                            "confirm": {"type": "boolean", "default": False},
+                        },
+                        "required": ["device_id", "capability"],
+                        "additionalProperties": False,
+                    },
+                },
+                "verify": {
+                    "oneOf": [
+                        {"type": "object"},
+                        {"type": "array", "items": {"type": "object"}},
+                    ]
+                },
+                "requires_approval": {"type": "boolean", "default": True},
+                "metadata": {"type": "object"},
+                "mission_id": {"type": "string"},
+            },
+            "required": ["goal", "actions"],
+            "additionalProperties": False,
+        },
+    },
+    {
+        "name": "iot_mission_status",
+        "description": "Read one mission by id.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {"mission_id": {"type": "string"}},
+            "required": ["mission_id"],
+            "additionalProperties": False,
+        },
+    },
+    {
+        "name": "iot_mission_control",
+        "description": "Approve, run, or cancel a mission. Approval requires confirm=true.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "mission_id": {"type": "string"},
+                "action": {
+                    "type": "string",
+                    "enum": ["approve", "run", "cancel"],
+                },
+                "actor": {"type": "string", "default": "owner"},
+                "confirm": {"type": "boolean", "default": False},
+            },
+            "required": ["mission_id", "action"],
+            "additionalProperties": False,
+        },
+    },
 ]
 
 
@@ -681,6 +895,222 @@ def _tool_iot_decommission(arguments: dict) -> dict:
     return _text_result(json.dumps(result, ensure_ascii=False, indent=2))
 
 
+def _skill_surface() -> Any:
+    if isinstance(RUNTIME, RemoteRuntime):
+        return RUNTIME
+    runner = _skill_runner()
+    if runner is None:
+        raise RuntimeError("skill runner unavailable")
+    return runner
+
+
+def _tool_iot_skills(_arguments: dict) -> dict:
+    surface = _skill_surface()
+    if isinstance(surface, RemoteRuntime):
+        result = surface.skills()
+    else:
+        result = surface.status()
+    return _text_result(json.dumps(result, ensure_ascii=False, indent=2))
+
+
+def _tool_iot_skill_describe(arguments: dict) -> dict:
+    skill_id = str(arguments.get("skill_id", "")).strip()
+    if not skill_id:
+        return _text_result("skill_id is required", is_error=True)
+    if isinstance(RUNTIME, RemoteRuntime):
+        result = RUNTIME.skill_describe(skill_id)
+    else:
+        runner = _skill_runner()
+        if runner is None:
+            return _text_result("skill runner unavailable", is_error=True)
+        result = {
+            "ok": True,
+            "skill": SKILLS.get(skill_id),
+            "preflight": runner.preflight(skill_id),
+        }
+    return _text_result(json.dumps(result, ensure_ascii=False, indent=2))
+
+
+def _tool_iot_skill_run(arguments: dict) -> dict:
+    skill_id = str(arguments.get("skill_id", "")).strip()
+    if not skill_id:
+        return _text_result("skill_id is required", is_error=True)
+    confirm = bool(arguments.get("confirm", False))
+    force = bool(arguments.get("force", False))
+    mode = str(arguments.get("mode", "supervised"))
+    try:
+        if isinstance(RUNTIME, RemoteRuntime):
+            result = RUNTIME.skill_run(
+                skill_id, confirm=confirm, force=force, mode=mode
+            )
+        else:
+            runner = _skill_runner()
+            if runner is None:
+                return _text_result("skill runner unavailable", is_error=True)
+            result = runner.run(skill_id, confirm=confirm, force=force, mode=mode)
+    except Exception as exc:
+        return _text_result(
+            json.dumps(
+                {"ok": False, "skill_id": skill_id, "error": str(exc)},
+                ensure_ascii=False,
+                indent=2,
+            ),
+            is_error=True,
+        )
+    return _text_result(json.dumps(result, ensure_ascii=False, indent=2))
+
+
+def _tool_iot_skill_status(_arguments: dict) -> dict:
+    surface = _skill_surface()
+    if isinstance(surface, RemoteRuntime):
+        result = surface.skill_status()
+    else:
+        result = surface.status()
+    return _text_result(json.dumps(result, ensure_ascii=False, indent=2))
+
+
+def _tool_iot_observations(arguments: dict) -> dict:
+    mission_id = str(arguments.get("mission_id", ""))
+    device_id = str(arguments.get("device_id", ""))
+    try:
+        since = int(arguments.get("since", 0) or 0)
+        limit = int(arguments.get("limit", 50) or 50)
+    except (TypeError, ValueError):
+        return _text_result("since/limit must be integers", is_error=True)
+    if isinstance(RUNTIME, RemoteRuntime):
+        result = RUNTIME.observations(
+            limit=limit, since=since, mission_id=mission_id, device_id=device_id
+        )
+        return _text_result(
+            json.dumps({"observations": result}, ensure_ascii=False, indent=2)
+        )
+    services = _services()
+    if services is None:
+        return _text_result("observation service unavailable", is_error=True)
+    observations, _missions = services
+    return _text_result(
+        json.dumps(
+            {
+                "observations": observations.observations(
+                    limit=limit,
+                    since=since,
+                    mission_id=mission_id,
+                    device_id=device_id,
+                )
+            },
+            ensure_ascii=False,
+            indent=2,
+        )
+    )
+
+
+def _tool_iot_observe(arguments: dict) -> dict:
+    mission_id = str(arguments.get("mission_id", ""))
+    try:
+        limit = int(arguments.get("limit", 20) or 20)
+    except (TypeError, ValueError):
+        return _text_result("limit must be an integer", is_error=True)
+    if isinstance(RUNTIME, RemoteRuntime):
+        result = RUNTIME.situation(mission_id=mission_id, limit=limit)
+    else:
+        services = _services()
+        if services is None:
+            return _text_result("observation service unavailable", is_error=True)
+        result = services[0].situation(mission_id=mission_id, limit=limit)
+    return _text_result(json.dumps(result, ensure_ascii=False, indent=2))
+
+
+def _tool_iot_missions(arguments: dict) -> dict:
+    try:
+        limit = int(arguments.get("limit", 50) or 50)
+    except (TypeError, ValueError):
+        return _text_result("limit must be an integer", is_error=True)
+    status = str(arguments.get("status", ""))
+    if isinstance(RUNTIME, RemoteRuntime):
+        result = RUNTIME.missions(limit=limit, status=status)
+    else:
+        services = _services()
+        if services is None:
+            return _text_result("mission service unavailable", is_error=True)
+        result = services[1].list(limit=limit, status=status)
+    return _text_result(json.dumps({"missions": result}, ensure_ascii=False, indent=2))
+
+
+def _tool_iot_mission_create(arguments: dict) -> dict:
+    payload = {
+        "goal": arguments.get("goal", ""),
+        "actions": arguments.get("actions"),
+        "verify": arguments.get("verify"),
+        "requires_approval": bool(arguments.get("requires_approval", True)),
+        "metadata": arguments.get("metadata") or {},
+        "mission_id": str(arguments.get("mission_id", "")),
+    }
+    try:
+        if isinstance(RUNTIME, RemoteRuntime):
+            result = RUNTIME.mission_create(**payload)
+        else:
+            services = _services()
+            if services is None:
+                return _text_result("mission service unavailable", is_error=True)
+            result = services[1].create(**payload)
+    except (MissionError, ValueError, TypeError) as exc:
+        return _text_result(
+            json.dumps({"ok": False, "error": str(exc)}, ensure_ascii=False, indent=2),
+            is_error=True,
+        )
+    return _text_result(json.dumps(result, ensure_ascii=False, indent=2))
+
+
+def _tool_iot_mission_status(arguments: dict) -> dict:
+    mission_id = str(arguments.get("mission_id", "")).strip()
+    if not mission_id:
+        return _text_result("mission_id is required", is_error=True)
+    try:
+        if isinstance(RUNTIME, RemoteRuntime):
+            result = RUNTIME.mission(mission_id)
+        else:
+            services = _services()
+            if services is None:
+                return _text_result("mission service unavailable", is_error=True)
+            result = services[1].get(mission_id)
+    except MissionNotFound as exc:
+        return _text_result(str(exc), is_error=True)
+    return _text_result(json.dumps(result, ensure_ascii=False, indent=2))
+
+
+def _tool_iot_mission_control(arguments: dict) -> dict:
+    mission_id = str(arguments.get("mission_id", "")).strip()
+    action = str(arguments.get("action", "")).strip()
+    actor = str(arguments.get("actor", "owner"))
+    confirm = bool(arguments.get("confirm", False))
+    if not mission_id:
+        return _text_result("mission_id is required", is_error=True)
+    if action not in ("approve", "run", "cancel"):
+        return _text_result("action must be approve, run, or cancel", is_error=True)
+    try:
+        if isinstance(RUNTIME, RemoteRuntime):
+            result = RUNTIME.mission_control(
+                mission_id, action, actor=actor, confirm=confirm
+            )
+        else:
+            services = _services()
+            if services is None:
+                return _text_result("mission service unavailable", is_error=True)
+            service = services[1]
+            if action == "approve":
+                result = service.approve(mission_id, actor=actor, confirm=confirm)
+            elif action == "run":
+                result = service.run(mission_id)
+            else:
+                result = service.cancel(mission_id, actor=actor)
+    except (MissionError, MissionNotFound, ValueError) as exc:
+        return _text_result(
+            json.dumps({"ok": False, "error": str(exc)}, ensure_ascii=False, indent=2),
+            is_error=True,
+        )
+    return _text_result(json.dumps(result, ensure_ascii=False, indent=2))
+
+
 HANDLERS = {
     "lan_inventory": _tool_lan_inventory,
     "device_details": _tool_device_details,
@@ -700,6 +1130,16 @@ HANDLERS = {
     "iot_call": _tool_iot_call,
     "iot_commission": _tool_iot_commission,
     "iot_decommission": _tool_iot_decommission,
+    "iot_skills": _tool_iot_skills,
+    "iot_skill_describe": _tool_iot_skill_describe,
+    "iot_skill_run": _tool_iot_skill_run,
+    "iot_skill_status": _tool_iot_skill_status,
+    "iot_observations": _tool_iot_observations,
+    "iot_observe": _tool_iot_observe,
+    "iot_missions": _tool_iot_missions,
+    "iot_mission_create": _tool_iot_mission_create,
+    "iot_mission_status": _tool_iot_mission_status,
+    "iot_mission_control": _tool_iot_mission_control,
 }
 
 
@@ -752,6 +1192,8 @@ def handle(request: dict) -> dict | None:
 
 
 def main() -> None:
+    _skill_runner()
+    _services()
     try:
         for line in sys.stdin:
             line = line.strip()
@@ -766,6 +1208,8 @@ def main() -> None:
                 sys.stdout.write(json.dumps(response, ensure_ascii=False) + "\n")
                 sys.stdout.flush()
     finally:
+        _stop_skill_runner()
+        _stop_observation_services()
         RUNTIME.close()
 
 

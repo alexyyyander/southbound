@@ -29,8 +29,9 @@ from .client import RemoteRuntime
 from .event_store import EventStore
 from .graph import LANGraph
 from .interaction import InteractionService, InteractionStore
-from .paths import DATA_DIR
+from .paths import DATA_DIR, SKILLS_DIR
 from .runtime import EventBus, SouthboundRuntime
+from .skills import SkillRegistry, SkillRunner
 
 _RUNTIMES: list[SouthboundRuntime | RemoteRuntime] = []
 
@@ -395,6 +396,47 @@ def cmd_decommission(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_skills(args: argparse.Namespace) -> int:
+    registry = SkillRegistry.from_directory(SKILLS_DIR)
+    rows = registry.list(include_manifest=args.manifest)
+    if args.json:
+        print(json.dumps({"skills": rows}, ensure_ascii=False, indent=2))
+        return 0
+    print(f"{'skill':<24} {'tier':<5} {'action':<6} {'status':<10} name")
+    print("-" * 78)
+    for item in rows:
+        print(
+            f"{item['id']:<24} {item['edge_tier']:<5} "
+            f"{item['action_tier']:<6} {item['status']:<10} {item['name']}"
+        )
+    return 0
+
+
+def cmd_skill_run(args: argparse.Namespace) -> int:
+    runtime = _runtime()
+    if isinstance(runtime, RemoteRuntime):
+        result = runtime.skill_run(
+            args.skill_id,
+            confirm=args.confirm,
+            force=args.force,
+            mode=args.mode,
+        )
+    else:
+        runner = SkillRunner(
+            runtime,
+            SkillRegistry.from_directory(SKILLS_DIR),
+            mode="shadow",
+        )
+        result = runner.run(
+            args.skill_id,
+            confirm=args.confirm,
+            force=args.force,
+            mode=args.mode,
+        )
+    print(json.dumps(result, ensure_ascii=False, indent=2))
+    return 0 if result.get("ok") else 1
+
+
 def cmd_info(_args: argparse.Namespace) -> int:
     print("Southbound 工具链\n")
     print("  discover  ARP / SSDP / mDNS 发现与分级")
@@ -405,6 +447,8 @@ def cmd_info(_args: argparse.Namespace) -> int:
     print("  serve     启动 Southbound runtime + 可视化面板")
     print("  mcp       stdio MCP server；可用 --remote 连接共享 runtime")
     print("  sim       intent 的兼容别名")
+    print("  skills    列出 skill manifests")
+    print("  skill     运行一个 skill（需显式 --confirm 时）")
     print("  tools     接入工具层的能力目录")
     print("  call      通过策略与审计层执行设备能力")
     print("  onboard   受控接入新设备（需 --confirm）")
@@ -583,6 +627,22 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("device_id")
     p.add_argument("--confirm", action="store_true")
     p.set_defaults(func=cmd_decommission)
+
+    p = sub.add_parser("skills", help="list versioned edge skills")
+    p.add_argument("--json", action="store_true")
+    p.add_argument("--manifest", action="store_true", help="include full manifests")
+    p.set_defaults(func=cmd_skills)
+
+    p = sub.add_parser("skill", help="run one edge skill")
+    p.add_argument("skill_id")
+    p.add_argument("--confirm", action="store_true")
+    p.add_argument("--force", action="store_true")
+    p.add_argument(
+        "--mode",
+        choices=["shadow", "supervised", "autonomous"],
+        default="supervised",
+    )
+    p.set_defaults(func=cmd_skill_run)
 
     p = sub.add_parser("info", help="show the toolchain map")
     p.set_defaults(func=cmd_info)

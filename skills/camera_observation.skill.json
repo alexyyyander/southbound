@@ -1,0 +1,67 @@
+{
+  "schema_version": 1,
+  "id": "camera_observation",
+  "name": "Camera Observation",
+  "version": "0.1.0",
+  "description": "Capture a local camera snapshot on request, summarize it locally, and return a structured observation without sending raw video to the model.",
+  "status": "planned",
+  "edge_tier": "T2-T3",
+  "action_tier": "A",
+  "hardware": {
+    "min_ram_mb": 512,
+    "radios": ["Ethernet", "Wi-Fi"],
+    "sensors": ["RTSP/ONVIF camera"],
+    "actuators": [],
+    "requires_local_broker": false,
+    "offline_capable": true,
+    "accelerator_optional": ["Coral", "Hailo", "Jetson GPU"]
+  },
+  "requires": {
+    "device_kinds": ["camera"],
+    "capabilities": ["snapshot", "clip"],
+    "signals": ["motion", "person", "package"]
+  },
+  "trigger": {
+    "event_type": "device.state",
+    "device_id": "entry_camera",
+    "field": "motion",
+    "equals": true,
+    "for_s": 2
+  },
+  "guard": {
+    "cooldown_s": 30,
+    "max_actions_per_hour": 60,
+    "manual_override": true,
+    "privacy_zone": "entry_only"
+  },
+  "actions": [
+    {
+      "device_id": "entry_camera",
+      "capability": "snapshot",
+      "arguments": {}
+    }
+  ],
+  "verify": {
+    "device_id": "entry_camera",
+    "field": "last_snapshot_status",
+    "equals": "ok",
+    "within_s": 10
+  },
+  "approval": "none",
+  "fallback": "notify_agent",
+  "privacy": {
+    "camera": true,
+    "microphone": false,
+    "retention": "local_24h",
+    "raw_video_to_model": false,
+    "redact_faces": true
+  },
+  "telemetry": ["device.state", "observation", "agent.notice"],
+  "failure_modes": [
+    "camera offline",
+    "RTSP timeout",
+    "privacy mask failure",
+    "storage full",
+    "model unavailable"
+  ]
+}

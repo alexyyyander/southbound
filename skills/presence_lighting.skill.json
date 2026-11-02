@@ -1,0 +1,63 @@
+{
+  "schema_version": 1,
+  "id": "presence_lighting",
+  "name": "Presence Lighting",
+  "version": "0.1.0",
+  "description": "Turn on a lamp when a person is present and the room is dark; verify the resulting state.",
+  "status": "simulated",
+  "edge_tier": "T1-T2",
+  "action_tier": "B",
+  "hardware": {
+    "min_ram_mb": 64,
+    "radios": ["Zigbee", "Wi-Fi"],
+    "sensors": ["mmWave presence", "door sensor", "ambient light"],
+    "actuators": ["smart lamp", "relay"],
+    "requires_local_broker": true,
+    "offline_capable": true
+  },
+  "requires": {
+    "device_kinds": ["binary_sensor", "sensor", "light"],
+    "capabilities": ["read", "turn_on", "turn_off", "set_brightness"],
+    "signals": ["presence", "open", "illuminance"]
+  },
+  "trigger": {
+    "device_id": "entry_door",
+    "field": "open",
+    "equals": true,
+    "for_s": 2
+  },
+  "guard": {
+    "cooldown_s": 60,
+    "max_actions_per_hour": 20,
+    "clear_after_s": 10,
+    "manual_override": true,
+    "time_window": "18:00-06:00"
+  },
+  "actions": [
+    {
+      "device_id": "living_light",
+      "capability": "turn_on",
+      "arguments": {}
+    }
+  ],
+  "verify": {
+    "device_id": "living_light",
+    "field": "on",
+    "equals": true,
+    "within_s": 5
+  },
+  "approval": "none",
+  "fallback": "notify_agent",
+  "privacy": {
+    "camera": false,
+    "microphone": false,
+    "retention": "none"
+  },
+  "telemetry": ["signal", "command", "state", "verify"],
+  "failure_modes": [
+    "presence sensor stale",
+    "lamp adapter offline",
+    "state readback mismatch",
+    "manual switch override"
+  ]
+}

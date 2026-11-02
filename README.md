@@ -7,7 +7,7 @@
 <p align="center"><strong>本地优先的 IoT Agent 南向接入层</strong></p>
 
 <p align="center">
-  <img alt="version 0.11.0" src="https://img.shields.io/badge/version-0.11.0-0F7D78?style=flat-square">
+  <img alt="version 0.13.0" src="https://img.shields.io/badge/version-0.13.0-0F7D78?style=flat-square">
   <img alt="Python 3.10+" src="https://img.shields.io/badge/python-3.10%2B-12262F?style=flat-square">
   <img alt="MIT" src="https://img.shields.io/badge/license-MIT-CF4A29?style=flat-square">
   <img alt="Alpha" src="https://img.shields.io/badge/status-alpha-70848B?style=flat-square">
@@ -66,7 +66,7 @@
 | **2.5D 房间实验** | `GET /scene`：可移动 avatar、presence 信号、点击设备、自动反射与回读验证 |
 | **Splat 预览** | `/scene` 内切换 WebGL 合成 splat：轨道旋转、设备热点、avatar 投影；同一控制层 |
 | **可视化** | 网络拓扑、设备清单、模拟端点、Agent 控制台、接入表单 |
-| **MCP** | 18 个工具：发现、深扫、LAN 图、交互端点、模拟器、接入层、受控 onboarding |
+| **MCP** | 28 个工具：发现、深扫、LAN 图、交互端点、skills、observations、missions、模拟器、接入层、受控 onboarding |
 | **无硬件闭环** | 六个虚拟端点 + 确定性 agent trace，没有设备也能跑 |
 
 BLE / NFC 的配置、事件入口与无硬件演示见 [硬件适配器说明](docs/HARDWARE_ADAPTERS.md)。
@@ -271,6 +271,9 @@ Southbound 的“扩散”是 **受控接入**，不是把 agent 代码复制到
 | 命令 | 作用 |
 |---|---|
 | `southbound survey` | 无主机网络/频段 survey、adapter readiness 与本地报告 |
+| `southbound info` | 工具链地图 |
+| `southbound skills [--json] [--manifest]` | 列出 skill manifests |
+| `southbound skill <id> [--confirm] [--force] [--mode]` | 通过 AccessHub 运行一个 skill |
 | `southbound discover --sweep` | 发现设备并写入 `data/inventory.json` |
 | `southbound scan --sweep` | 端口扫描（大网段建议 `--hosts` 定向） |
 | `southbound scan --hosts 192.168.1.10,192.168.1.20 --full` | 只扫关键设备 |
@@ -287,7 +290,6 @@ Southbound 的“扩散”是 **受控接入**，不是把 agent 代码复制到
 | `southbound interact "..."` | 通过交互端点发送一轮，支持 `--output`、`--session`、`--no-execute` |
 | `southbound handoff <session> <endpoint>` | 切换 session 的输入端点 |
 | `southbound mcp` | 启动 stdio MCP server；用 `--remote URL` 连接共享 runtime |
-| `southbound info` | 工具链地图 |
 
 ### MCP
 
@@ -310,6 +312,9 @@ claude mcp add --scope project southbound -- python3 /path/to/southbound/mcp_ser
 | 交互端点 | `interaction_endpoints`、`interaction_input` |
 | 模拟器 | `sim_devices`、`sim_action`、`sim_goal` |
 | 接入层 | `iot_hub_status`、`iot_devices_list`、`iot_device_describe`、`iot_tool_catalog`、`iot_call` |
+| Skills | `iot_skills`、`iot_skill_describe`、`iot_skill_run`、`iot_skill_status` |
+| Observations | `iot_observe`、`iot_observations` |
+| Missions | `iot_missions`、`iot_mission_create`、`iot_mission_status`、`iot_mission_control` |
 | 受控 onboarding | `iot_commission`、`iot_decommission` |
 
 首次使用需要在 Claude Code 中批准该 server。
@@ -339,6 +344,11 @@ SOUTHBOUND_REMOTE_URL=http://127.0.0.1:8765 python3 -m southbound.mcp_server
 - `GET /api/events`（SSE）
 - `GET /api/events/recent?since=<id>`
 - `GET /api/graph`、`GET /api/graph/devices/<device_id>`、`GET /api/state`
+- `GET /api/skills`、`GET /api/skills/status`、`GET /api/skills/<skill_id>`
+- `POST /api/skills/<skill_id>/run`、`POST /api/skills/mode`
+- `GET /api/observations`、`GET /api/observations/<id>`、`GET /api/situation`
+- `GET /api/missions`、`GET /api/missions/<id>`
+- `POST /api/missions`、`POST /api/missions/<id>/approve|run|cancel`
 - `GET /api/interaction/endpoints`、`GET /api/interaction/sessions`
 - `POST /api/interaction/endpoints`、`POST /api/interaction/heartbeat`
 - `POST /api/interaction/input`、`POST /api/interaction/handoff`
@@ -376,6 +386,9 @@ southbound/
 │   ├── event_store.py       # 持久事件日志
 │   ├── interaction.py       # 多硬件端点、会话与模态路由
 │   ├── scene.py             # 2.5D presence、低风险反射与验证
+│   ├── skills.py            # SkillRegistry / SkillRunner / manifest 校验
+│   ├── observations.py      # event → observation / situation
+│   ├── missions.py          # mission 状态机与审批
 │   ├── discover.py          # ARP / mDNS / SSDP
 │   ├── survey.py            # 跨平台 survey / readiness / 报告
 │   ├── deep_scan.py         # 端口与服务指纹
@@ -403,7 +416,8 @@ southbound/
 ├── config/access.example.json
 ├── deploy/systemd/          # Pi 常驻 harness 示例
 ├── docs/                    # About、架构、协议、演示、harness、接入层、onboarding、芯片、信号、硬件、扫描
-├── tests/                   # 128 项 unittest
+├── skills/                  # 版本化 edge skill manifests
+├── tests/                   # 152 项 unittest
 ├── data/                    # 本地生成，gitignored
 ├── viz_server.py            # 面板兼容入口
 ├── mcp_server.py            # MCP 兼容入口
@@ -430,7 +444,7 @@ make lint     # ruff check .
 make build    # wheel + sdist
 ```
 
-当前 128 项标准库测试覆盖分级规则、模拟器、agent 目标拆分、能力校验、策略、审计、工具目录、运行时/事件总线、持久化 LAN 图与事件日志、多硬件交互端点/会话/路由、远程 runtime client/token、受控接入与持久化、2.5D 场景 presence/自动验证、survey 解析/readiness、HA 适配器映射、MQTT payload 和 CLI 解析，以及适配器注册、BLE/NFC 模拟读写、设备事件、驱动边界和资源释放。
+当前 152 项标准库测试覆盖分级规则、模拟器、agent 目标拆分、能力校验、策略、审计、工具目录、运行时/事件总线、持久化 LAN 图与事件日志、多硬件交互端点/会话/路由、远程 runtime client/token、受控接入与持久化、2.5D 场景 presence/自动验证、survey 解析/readiness、skill manifest 校验/trigger/shadow/verify、HA 适配器映射、MQTT payload 和 CLI 解析，以及适配器注册、BLE/NFC 模拟读写、设备事件、驱动边界和资源释放。
 
 CI 在 Python 3.10–3.13 上跑 ruff、单元测试和 wheel/sdist 构建。
 
@@ -443,6 +457,10 @@ CI 在 Python 3.10–3.13 上跑 ruff、单元测试和 wheel/sdist 构建。
 - [Survey 与 Harness 部署](docs/HARNESS.md) — 无主机 survey、Pi 最小 harness、硬件与验收
 - [协议与 API](docs/PROTOCOL.md) — northbound/southbound、HTTP、事件与 MCP schema
 - [技术架构与可行性](docs/ARCHITECTURE.md)
+- [相关研究与竞品](docs/RELATED_WORK.md) — Ori、AssetOpsBench、WoT/IBN、MCP 安全
+- [Edge Skills 与硬件条件](docs/EDGE_SKILLS.md) — skill 合约、T0–T3 硬件、电源/网络/执行器/安全/隐私
+- [Observations 与 Situation](docs/OBSERVATIONS.md) — 事件归一化、observation store、situation snapshot
+- [Missions](docs/MISSIONS.md) — proposed/approved/running/verified 状态机、审批与回读
 - [共享 Runtime Service](docs/RUNTIME_SERVICE.md) — 一个设备图供 Dashboard / MCP / CLI 共用
 - [多硬件交互](docs/INTERACTION.md) — 端点、会话、模态路由与跨端 handoff
 - [架构拆解图](docs/ARCHITECTURE_BREAKDOWN.md) — harness / MCP / core / adapters / devices 分层
@@ -468,14 +486,17 @@ CI 在 Python 3.10–3.13 上跑 ruff、单元测试和 wheel/sdist 构建。
 - 持久事件日志：事件 id 跨重启，`/api/events/recent` 可重放；
 - Home Assistant WebSocket 状态事件：可选 `websocket-client`，事件进入同一 EventBus；
 - 多硬件交互面：端点注册、会话、模态路由、跨端 handoff、`/interaction` 面板；
+- Skill runtime：6 个 manifest、trigger/guard、shadow/proposed、AccessHub 执行、verify/fallback、4 个 MCP 工具；
+- Observation runtime：事件→结构化 observation、situation snapshot、2 个 MCP 工具；
+- Mission runtime：proposed/approved/running/verified 状态机、审批、动作执行与回读、4 个 MCP 工具；
 - 远程 runtime client：`SOUTHBOUND_REMOTE_URL` / `southbound mcp --remote`；
 - 远程 runtime token 认证：loopback 免 token，非 loopback 需要 Bearer token；
 - 受控 onboarding / commissioning / 持久化 / 撤销；
 - 2.5D 房间实验：presence 信号、低风险自动反射、Agent notice、回读验证；
 - WebGL 合成 splat 预览：轨道相机、设备热点、avatar 投影；
 - 无主机 `survey`：Wi-Fi/BLE/radio 证据、服务指纹、Pi/Linux 支持、readiness 报告；
-- 18 个 MCP 工具；
-- 128 项测试、CI、wheel/sdist。
+- 28 个 MCP 工具；
+- 152 项测试、CI、wheel/sdist。
 
 **下一步**
 

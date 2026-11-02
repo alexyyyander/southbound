@@ -1,0 +1,59 @@
+{
+  "schema_version": 1,
+  "id": "nfc_checkin",
+  "name": "NFC Check-in",
+  "version": "0.1.0",
+  "description": "Read a local NFC tag, verify its UID, and emit a check-in event for the agent.",
+  "status": "simulated",
+  "edge_tier": "T1-T2",
+  "action_tier": "A",
+  "hardware": {
+    "min_ram_mb": 32,
+    "radios": ["NFC"],
+    "sensors": ["NFC reader"],
+    "actuators": [],
+    "requires_local_broker": false,
+    "offline_capable": true
+  },
+  "requires": {
+    "device_kinds": ["nfc_reader"],
+    "capabilities": ["read"],
+    "signals": ["device.tag"]
+  },
+  "trigger": {
+    "event_type": "device.tag",
+    "device_id": "nfc:desk",
+    "field": "uid",
+    "matches": "allowed_uids"
+  },
+  "guard": {
+    "cooldown_s": 3,
+    "max_actions_per_hour": 120,
+    "manual_override": true
+  },
+  "actions": [
+    {
+      "device_id": "nfc:desk",
+      "capability": "read",
+      "arguments": {}
+    }
+  ],
+  "verify": {
+    "event_type": "device.tag",
+    "within_s": 2
+  },
+  "approval": "none",
+  "fallback": "ignore_unknown_tag",
+  "privacy": {
+    "camera": false,
+    "microphone": false,
+    "retention": "event_metadata_only"
+  },
+  "telemetry": ["device.tag", "agent.notice"],
+  "failure_modes": [
+    "unreadable tag",
+    "NFC reader disconnected",
+    "duplicate presentation",
+    "unknown UID"
+  ]
+}
