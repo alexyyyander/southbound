@@ -42,18 +42,28 @@ CAPABILITIES: dict[str, dict[str, Capability]] = {
         "read": Capability("read", "读取已绑定的 BLE GATT 特征（十六进制）", Risk.READ),
         "subscribe": Capability("subscribe", "订阅已绑定的 BLE GATT 通知", Risk.READ),
         "unsubscribe": Capability("unsubscribe", "停止 BLE 通知订阅", Risk.READ),
-        "write": Capability("write", "写入已绑定的 BLE GATT 特征", Risk.HIGH,
-                            parameters={"hex": {"type": "string", "maxLength": 1024}},
-                            required=("hex",)),
+        "write": Capability(
+            "write",
+            "写入已绑定的 BLE GATT 特征",
+            Risk.HIGH,
+            parameters={"hex": {"type": "string", "maxLength": 1024}},
+            required=("hex",),
+        ),
     },
     "nfc_reader": {
         "read": Capability("read", "读取 NFC 标签 UID 和 NDEF", Risk.READ),
         "subscribe": Capability("subscribe", "监听 NFC 刷卡事件", Risk.READ),
         "unsubscribe": Capability("unsubscribe", "停止 NFC 刷卡监听", Risk.READ),
-        "write_text": Capability("write_text", "向指定 UID 的标签写入 NDEF 文本", Risk.HIGH,
-                                 parameters={"text": {"type": "string", "maxLength": 1024},
-                                             "expected_uid": {"type": "string", "maxLength": 64}},
-                                 required=("text", "expected_uid")),
+        "write_text": Capability(
+            "write_text",
+            "向指定 UID 的标签写入 NDEF 文本",
+            Risk.HIGH,
+            parameters={
+                "text": {"type": "string", "maxLength": 1024},
+                "expected_uid": {"type": "string", "maxLength": 64},
+            },
+            required=("text", "expected_uid"),
+        ),
     },
     "light": {
         "turn_on": Capability("turn_on", "打开灯", Risk.LOW),
@@ -105,6 +115,20 @@ CAPABILITIES: dict[str, dict[str, Capability]] = {
             required=("mode",),
         ),
         "read": Capability("read", "读取净化器状态", Risk.READ),
+    },
+    "camera": {
+        "snapshot": Capability(
+            "snapshot",
+            "拍摄一张本地快照并保存为本地证据",
+            Risk.READ,
+            sensitivity="camera",
+        ),
+        "read": Capability(
+            "read",
+            "读取摄像头状态和最近快照信息",
+            Risk.READ,
+            sensitivity="camera",
+        ),
     },
     "thermostat": {
         "set_temperature": Capability(
@@ -211,6 +235,7 @@ def build_catalog(bindings: Iterable[DeviceBinding]) -> list[dict[str, Any]]:
                     "capability": capability.name,
                     "description": capability.description,
                     "risk": capability.risk.value,
+                    "sensitivity": capability.sensitivity,
                     "parameters": capability.parameters,
                     "required": list(capability.required),
                     "devices": [],

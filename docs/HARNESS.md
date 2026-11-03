@@ -67,7 +67,9 @@ on it. A used Pi 3 is best treated as a sensor/bridge node.
 
 - N100 mini PC, NAS, or Jetson Orin Nano.
 - PoE switch + Reolink/Axis/UniFi/Amcrest camera.
-- Frigate; local RTSP/ONVIF; structured observations only.
+- Frigate for detection/recording, or the built-in `camera` adapter for
+  snapshot + local motion observations; both keep raw frames on the edge.
+- Prefer local RTSP/ONVIF; structured observations only.
 
 ### Drone lab
 

@@ -244,6 +244,7 @@ class AccessHub:
             "policy": {
                 "mode": self.policy.config.mode,
                 "allow_high_risk": self.policy.config.allow_high_risk,
+                "allow_camera": self.policy.config.allow_camera,
             },
             "devices": len(self._bindings),
             "adapters": [

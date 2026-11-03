@@ -338,6 +338,16 @@ def cmd_onboard(args: argparse.Namespace) -> int:
         value = getattr(args, field)
         if value:
             request[field] = value
+    if args.source:
+        request["source"] = args.source
+    if args.camera_path:
+        request["path"] = args.camera_path
+    if args.url_env:
+        request["url_env"] = args.url_env
+    if args.index >= 0:
+        request["index"] = args.index
+    if args.perception:
+        request["perception"] = True
     if args.connection:
         try:
             request["connection"] = json.loads(args.connection)
@@ -437,6 +447,59 @@ def cmd_skill_run(args: argparse.Namespace) -> int:
     return 0 if result.get("ok") else 1
 
 
+def cmd_vision(args: argparse.Namespace) -> int:
+    runtime = _runtime()
+    if args.snapshot:
+        try:
+            result = runtime.call(args.snapshot, "snapshot")
+        except (AccessError, ValueError) as exc:
+            print(
+                json.dumps(
+                    {"ok": False, "error": str(exc)},
+                    ensure_ascii=False,
+                    indent=2,
+                )
+            )
+            return 1
+        print(json.dumps(result, ensure_ascii=False, indent=2))
+        return 0
+
+    if isinstance(runtime, RemoteRuntime):
+        status = runtime.vision_status()
+    else:
+        adapter = runtime.hub.adapters.get("camera")
+        if adapter is None:
+            status = {
+                "ok": False,
+                "error": "camera adapter not enabled",
+                "cameras": [],
+            }
+        else:
+            status = adapter.status()
+    if args.json:
+        print(json.dumps(status, ensure_ascii=False, indent=2))
+        return 0
+    cameras = status.get("cameras") or []
+    if not cameras:
+        print(status.get("error") or "未有摄像头。")
+        print(
+            "启用 config/access.local.json 的 camera adapter，"
+            "或在 `southbound serve` 面板接入演示摄像头。"
+        )
+        return 0
+    print(f"{'device_id':<22} {'source':<10} {'room':<8} {'motion':<7} name")
+    print("-" * 76)
+    for camera in cameras:
+        print(
+            f"{camera.get('device_id', ''):<22} "
+            f"{camera.get('source', ''):<10} "
+            f"{camera.get('room', ''):<8} "
+            f"{str(bool(camera.get('motion'))):<7} "
+            f"{camera.get('name', '')}"
+        )
+    return 0
+
+
 def cmd_info(_args: argparse.Namespace) -> int:
     print("Southbound 工具链\n")
     print("  discover  ARP / SSDP / mDNS 发现与分级")
@@ -454,6 +517,7 @@ def cmd_info(_args: argparse.Namespace) -> int:
     print("  onboard   受控接入新设备（需 --confirm）")
     print("  decommission 移除已接入设备（需 --confirm）")
     print("  access    适配器、策略、审计与事件状态")
+    print("  vision    摄像头状态与本地快照")
     print("  graph     持久化 LAN 设备图与跨协议身份")
     print("  interact  多硬件会话：输入、输出路由与 handoff")
     print("  handoff   切换 session 的输入端点")
@@ -615,6 +679,16 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--friendly-name", default="")
     p.add_argument("--command-topic", default="")
     p.add_argument("--state-topic", default="")
+    p.add_argument(
+        "--source",
+        default="",
+        choices=["", "synthetic", "file", "usb", "rtsp"],
+        help="camera source",
+    )
+    p.add_argument("--path", dest="camera_path", default="")
+    p.add_argument("--url-env", default="")
+    p.add_argument("--index", type=int, default=-1)
+    p.add_argument("--perception", action="store_true")
     p.add_argument("--state", default="", help="JSON state for sim devices")
     p.add_argument(
         "--connection", default="", help="JSON connection fields for BLE/NFC"
@@ -643,6 +717,16 @@ def build_parser() -> argparse.ArgumentParser:
         default="supervised",
     )
     p.set_defaults(func=cmd_skill_run)
+
+    p = sub.add_parser("vision", help="camera status or a local snapshot")
+    p.add_argument(
+        "--snapshot",
+        default="",
+        metavar="DEVICE_ID",
+        help="capture one snapshot through the access layer",
+    )
+    p.add_argument("--json", action="store_true")
+    p.set_defaults(func=cmd_vision)
 
     p = sub.add_parser("info", help="show the toolchain map")
     p.set_defaults(func=cmd_info)

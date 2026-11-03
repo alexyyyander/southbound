@@ -107,8 +107,16 @@ def _nfc(config: dict, _simulator: Simulator | None) -> DeviceAdapter:
     return NfcAdapter(config)
 
 
+def _camera(config: dict, _simulator: Simulator | None) -> DeviceAdapter:
+    from .adapters.camera import CameraAdapter
+
+    return CameraAdapter(config)
+
+
 REGISTRY = AdapterRegistry()
-_HOME_KINDS = tuple(k for k in CAPABILITIES if k not in ("ble_device", "nfc_reader"))
+_HOME_KINDS = tuple(
+    k for k in CAPABILITIES if k not in ("ble_device", "nfc_reader", "camera")
+)
 REGISTRY.register(
     AdapterSpec(
         "sim", lambda c, s: SimAdapter(s or Simulator()), _HOME_KINDS, ("state",), True
@@ -133,3 +141,11 @@ REGISTRY.register(
 )
 REGISTRY.register(AdapterSpec("ble", _ble, ("ble_device",), ("connection",)))
 REGISTRY.register(AdapterSpec("nfc", _nfc, ("nfc_reader",), ("connection",)))
+REGISTRY.register(
+    AdapterSpec(
+        "camera",
+        _camera,
+        ("camera",),
+        ("source", "path", "url_env", "index"),
+    )
+)

@@ -2,7 +2,7 @@
 
 本文定义 Southbound 的 **skill contract**：一个 skill 不是一段 prompt，也不是任意 Python 插件，而是“某个边缘硬件场景下，允许在什么条件下、通过哪些 capability、做什么动作、如何验证、失败怎么办”的版本化契约。
 
-当前状态：**契约、示例 manifests、`SkillRegistry`、`SkillRunner` 和 MCP/CLI skill 工具已接入。** 默认 runner 使用 shadow 模式；真正执行仍必须经过 `SouthboundRuntime.call()` → `AccessHub` 的策略、审计和回读，计划中的 camera/drone skill 需要对应 adapter 和硬件验收。
+当前状态：**契约、示例 manifests、`SkillRegistry`、`SkillRunner` 和 MCP/CLI skill 工具已接入。** 默认 runner 使用 shadow 模式；真正执行仍必须经过 `SouthboundRuntime.call()` → `AccessHub` 的策略、审计和回读。Camera adapter 与本地运动感知已随 0.14.0 接入；`camera_observation` skill 仍标记为 planned，等真实摄像头与 trigger/verify 现场校准后再启用；drone skill 仍需要对应 adapter 和硬件验收。
 
 ## 1. Skill 的边界
 

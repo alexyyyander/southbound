@@ -26,6 +26,9 @@ class Capability:
     parameters: dict[str, Any] = field(default_factory=dict)
     required: tuple[str, ...] = ()
     returns: str = "state"
+    # Risk describes what an action changes; sensitivity describes what it
+    # exposes. A camera snapshot is read-only but still needs its own gate.
+    sensitivity: str = ""
 
     def schema(self) -> dict[str, Any]:
         return {
@@ -43,6 +46,7 @@ class Capability:
             "parameters": self.parameters,
             "required": list(self.required),
             "returns": self.returns,
+            "sensitivity": self.sensitivity,
         }
 
 

@@ -89,6 +89,7 @@
 | `purifier` | turn_on / turn_off / toggle / set_mode / read | low / read |
 | `thermostat` | set_temperature / read | medium / read |
 | `lock` | lock / unlock / read | **high** / read |
+| `camera` | snapshot / read | read，但 `sensitivity: camera` |
 
 新增设备类型只需在 `capabilities.py` 增加定义，adapter 实现对应执行。
 
@@ -165,6 +166,7 @@ Agent 先读 catalog 或 `iot_devices_list`，再用 `iot_call` 执行。
   "mode": "supervised",
   "allow_high_risk": false,
   "allow_auto_commission": false,
+  "allow_camera": true,
   "allowed_rooms": null,
   "allowed_kinds": null,
   "allowed_adapters": null
@@ -179,6 +181,10 @@ Agent 先读 catalog 或 `iot_devices_list`，再用 `iot_call` 执行。
 
 高风险动作（门锁、电源、燃气）默认**不可用**。即使用户要求“全智能”，工具层也不会让 LLM 直接开锁。
 
+`allow_camera` 是独立于 risk 的隐私门：`snapshot` / `read` 的 risk 是 `read`，但
+capability 带 `sensitivity: camera`，关闭后连只读快照也会被拒绝。摄像头快照默认
+只落本地 `data/vision/`，见 [视觉感知](VISION.md)。
+
 `allowed_rooms` / `allowed_kinds` / `allowed_adapters` 是范围限制，适合把 agent 限定在实验室或客厅。
 
 设备接入由 `decide_commission()` 单独判断：
@@ -187,6 +193,7 @@ Agent 先读 catalog 或 `iot_devices_list`，再用 `iot_call` 执行。
 - `supervised`：必须 `confirm=true`；
 - `autonomous`：默认仍必须 `confirm=true`；只有 `allow_auto_commission=true` 才允许自动接入；
 - 请求包含高风险能力（如 `unlock`）时，还要求 `allow_high_risk=true`；
+- `kind=camera` 且 `allow_camera=false` 时，连接入也会被拒绝；
 - 未显式指定 capabilities 时，默认只授予非 high-risk 能力。
 
 ## 5. 适配器
@@ -199,6 +206,7 @@ Agent 先读 catalog 或 `iot_devices_list`，再用 `iot_call` 执行。
 | `mqtt` | 已实现，需 `paho-mqtt` | ESPHome/Tasmota/自定义 MQTT 设备 |
 | `ble` | 已实现，需 `bleak`；待硬件验收 | GATT 读写、通知、显式模拟模式 |
 | `nfc` | 已实现，需 `nfcpy`；待硬件验收 | 标签 UID/NDEF、刷卡事件、显式模拟模式 |
+| `camera` | 已实现：synthetic/file/USB/RTSP；待真实硬件验收 | 快照、运动感知、本地证据；USB 需 OpenCV，RTSP 需 ffmpeg |
 | ESPHome 原生 API | 未实现 | 推荐走 HA 或 MQTT |
 | Matter 原生 controller | 未实现 | 推荐走 HA 的 Matter 集成 |
 
@@ -385,7 +393,7 @@ class MyAdapter(DeviceAdapter):
 - 能力目录与 JSON Schema 参数校验；
 - 策略引擎与高风险硬门；
 - 审计日志；
-- 模拟器、Home Assistant、MQTT、Zigbee2MQTT、BLE、NFC 六类 adapter；后两者已完成模拟与库边界测试，待真实硬件验收，见 [硬件适配器](HARDWARE_ADAPTERS.md)；
+- 模拟器、Home Assistant、MQTT、Zigbee2MQTT、BLE、NFC、Camera 七类 adapter；BLE/NFC/摄像头已完成模拟与库边界测试，待真实硬件验收，见 [硬件适配器](HARDWARE_ADAPTERS.md) 与 [视觉感知](VISION.md)；
 - MCP、CLI、HTTP 三种入口；
 - SouthboundRuntime、EventBus、SSE 事件流与面板 flowbar；
 - 设备侧事件订阅：MQTT state、HA WebSocket `state_changed`、BLE 通知和 NFC 刷卡事件均已进入统一事件路径；

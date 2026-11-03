@@ -192,6 +192,20 @@ class RemoteRuntime:
         query = urllib.parse.urlencode({"mission_id": mission_id, "limit": limit})
         return self._request("GET", f"/api/situation?{query}")
 
+    def vision_status(self) -> dict[str, Any]:
+        return self._request("GET", "/api/vision/status")
+
+    def vision_snapshot(self, device_id: str) -> dict[str, Any]:
+        encoded = urllib.parse.quote(device_id, safe="")
+        return self._request("POST", f"/api/vision/{encoded}/snapshot", {})
+
+    def vision_observations(
+        self, limit: int = 50, device_id: str = ""
+    ) -> list[dict[str, Any]]:
+        query = urllib.parse.urlencode({"limit": limit, "device_id": device_id})
+        payload = self._request("GET", f"/api/vision/observations?{query}")
+        return list(payload.get("observations") or [])
+
     def missions(self, limit: int = 50, status: str = "") -> list[dict[str, Any]]:
         query = urllib.parse.urlencode({"limit": limit, "status": status})
         payload = self._request("GET", f"/api/missions?{query}")

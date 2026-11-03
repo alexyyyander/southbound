@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "southbound"
-version = "0.13.0"
+version = "0.14.0"
 description = "Southbound: local-first access layer for IoT agents"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -46,6 +46,7 @@ ha = ["websocket-client>=1.8"]
 survey = ["bleak>=0.22"]
 ble = ["bleak>=0.22"]
 nfc = ["nfcpy>=1.0.4"]
+vision = ["pillow>=10.0", "opencv-python-headless>=4.9"]
 dev = ["build>=1.2", "ruff>=0.6"]
 
 [project.scripts]

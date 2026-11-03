@@ -72,6 +72,34 @@ class CliParserTest(unittest.TestCase):
         self.assertTrue(args.ble)
         self.assertTrue(args.no_wifi)
 
+    def test_vision_command(self) -> None:
+        args = build_parser().parse_args(
+            ["vision", "--snapshot", "demo_camera", "--json"]
+        )
+        self.assertEqual(args.command, "vision")
+        self.assertEqual(args.snapshot, "demo_camera")
+        self.assertTrue(args.json)
+
+    def test_onboard_camera_options(self) -> None:
+        args = build_parser().parse_args(
+            [
+                "onboard",
+                "--adapter",
+                "camera",
+                "--kind",
+                "camera",
+                "--source",
+                "rtsp",
+                "--url-env",
+                "CAMERA_RTSP_URL",
+                "--perception",
+                "--confirm",
+            ]
+        )
+        self.assertEqual(args.source, "rtsp")
+        self.assertEqual(args.url_env, "CAMERA_RTSP_URL")
+        self.assertTrue(args.perception)
+
     def test_mcp_remote_command(self) -> None:
         args = build_parser().parse_args(["mcp", "--remote", "http://127.0.0.1:8765"])
         self.assertEqual(args.command, "mcp")

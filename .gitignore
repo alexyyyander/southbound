@@ -6,6 +6,7 @@ data/*.jsonl
 data/*.sqlite3
 data/*.sqlite3-*
 data/oui.csv
+data/vision/
 data/*.local.*
 config/access.local.json
 .pytest_cache/

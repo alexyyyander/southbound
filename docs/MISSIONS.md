@@ -56,5 +56,6 @@ Mission approval 不等于高风险动作的 `confirm`；action 本身仍需声�
 ## 当前边界
 
 - Mission 执行是同步的；长任务后台 worker、暂停/恢复、重试和分布式锁是下一阶段；
-- 没有真实 camera/drone adapter 的 action 会被 preflight/policy 阻止；
+- 没有对应 adapter 的 action（例如 drone）会被 preflight/policy 阻止；camera
+  snapshot 已随 0.14.0 可用，可作为 mission 的 verify/evidence 步骤；
 - mission 记录只保存非敏感元数据、动作结果和 verification，不保存原始媒体。

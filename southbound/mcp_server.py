@@ -27,6 +27,9 @@ Tools:
     lan_graph        persistent LAN graph, identities, and cached state
     interaction_endpoints  list interaction endpoints and modalities
     interaction_input      send a turn through an endpoint/session
+    iot_vision_status      cameras, sources, motion, and perception status
+    iot_vision_snapshot    policy-checked local snapshot with evidence reference
+    iot_vision_observe     recent vision observations
 """
 
 from __future__ import annotations
@@ -55,6 +58,7 @@ from .observations import ObservationService, ObservationStore
 from .paths import DATA_DIR, SKILLS_DIR
 from .runtime import EventBus, SouthboundRuntime
 from .skills import SkillRegistry, SkillRunner
+from .vision import PerceptionService
 
 REMOTE_ENV = "SOUTHBOUND_REMOTE_URL"
 REMOTE_TOKEN_ENV = "SOUTHBOUND_REMOTE_TOKEN"
@@ -105,6 +109,7 @@ SKILLS = SkillRegistry.from_directory(SKILLS_DIR)
 SKILL_RUNNER: SkillRunner | None = None
 OBSERVATIONS: ObservationService | None = None
 MISSIONS: MissionService | None = None
+PERCEPTION: PerceptionService | None = None
 
 
 def _stop_skill_runner() -> None:
@@ -115,7 +120,10 @@ def _stop_skill_runner() -> None:
 
 
 def _stop_observation_services() -> None:
-    global OBSERVATIONS, MISSIONS
+    global OBSERVATIONS, MISSIONS, PERCEPTION
+    if PERCEPTION is not None:
+        PERCEPTION.stop()
+        PERCEPTION = None
     if MISSIONS is not None:
         MISSIONS.close()
         MISSIONS = None
@@ -125,7 +133,7 @@ def _stop_observation_services() -> None:
 
 
 def _services() -> tuple[ObservationService, MissionService] | None:
-    global OBSERVATIONS, MISSIONS
+    global OBSERVATIONS, MISSIONS, PERCEPTION
     if isinstance(RUNTIME, RemoteRuntime):
         return None
     if OBSERVATIONS is None:
@@ -138,6 +146,9 @@ def _services() -> tuple[ObservationService, MissionService] | None:
             OBSERVATIONS,
             MissionStore(DATA_DIR / "missions.sqlite3"),
         )
+    if PERCEPTION is None:
+        PERCEPTION = PerceptionService(RUNTIME)
+        PERCEPTION.start()
     return OBSERVATIONS, MISSIONS  # type: ignore[return-value]
 
 
@@ -153,7 +164,7 @@ def _skill_runner() -> SkillRunner | None:
 
 
 SERVER_NAME = "southbound"
-SERVER_VERSION = "0.13.0"
+SERVER_VERSION = "0.14.0"
 DEFAULT_PROTOCOL = "2024-11-05"
 
 TOOLS = [
@@ -443,6 +454,26 @@ TOOLS = [
                 "friendly_name": {"type": "string"},
                 "command_topic": {"type": "string"},
                 "state_topic": {"type": "string"},
+                "source": {
+                    "type": "string",
+                    "enum": ["synthetic", "file", "usb", "rtsp"],
+                    "description": "Camera source type.",
+                },
+                "path": {"type": "string", "description": "Camera file path."},
+                "url_env": {
+                    "type": "string",
+                    "description": "Environment variable holding the RTSP URL; never pass credentials directly.",
+                },
+                "index": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "description": "USB camera index.",
+                },
+                "perception": {
+                    "type": "boolean",
+                    "description": "Sample this camera for motion observations.",
+                    "default": False,
+                },
                 "state": {"type": "object"},
                 "connection": {
                     "type": "object",
@@ -551,6 +582,46 @@ TOOLS = [
             "properties": {
                 "mission_id": {"type": "string"},
                 "limit": {"type": "integer", "default": 20},
+            },
+            "additionalProperties": False,
+        },
+    },
+    {
+        "name": "iot_vision_status",
+        "description": (
+            "List local cameras, their sources, availability, motion state, "
+            "and the perception service status. Raw frames stay on the host."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "properties": {},
+            "additionalProperties": False,
+        },
+    },
+    {
+        "name": "iot_vision_snapshot",
+        "description": (
+            "Capture one camera snapshot through AccessHub policy and audit. "
+            "Returns a local evidence reference and metadata, not raw image bytes."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "properties": {"device_id": {"type": "string"}},
+            "required": ["device_id"],
+            "additionalProperties": False,
+        },
+    },
+    {
+        "name": "iot_vision_observe",
+        "description": (
+            "List recent vision observations (motion start/stop) with "
+            "confidence and local evidence references."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "device_id": {"type": "string"},
+                "limit": {"type": "integer", "default": 30},
             },
             "additionalProperties": False,
         },
@@ -1020,6 +1091,68 @@ def _tool_iot_observe(arguments: dict) -> dict:
     return _text_result(json.dumps(result, ensure_ascii=False, indent=2))
 
 
+def _vision_adapter():
+    hub = getattr(RUNTIME, "hub", None)
+    return hub.adapters.get("camera") if hub is not None else None
+
+
+def _tool_iot_vision_status(_arguments: dict) -> dict:
+    if isinstance(RUNTIME, RemoteRuntime):
+        result = RUNTIME.vision_status()
+    else:
+        if PERCEPTION is None:
+            _services()
+        adapter = _vision_adapter()
+        if adapter is None:
+            result = {
+                "ok": False,
+                "error": "camera adapter not enabled",
+                "cameras": [],
+            }
+        else:
+            result = adapter.status()
+        result["perception"] = PERCEPTION.status() if PERCEPTION is not None else None
+    return _text_result(json.dumps(result, ensure_ascii=False, indent=2))
+
+
+def _tool_iot_vision_snapshot(arguments: dict) -> dict:
+    device_id = str(arguments.get("device_id", "")).strip()
+    if not device_id:
+        return _text_result("device_id is required", is_error=True)
+    try:
+        result = RUNTIME.call(device_id, "snapshot")
+    except AccessError as exc:
+        return _text_result(
+            json.dumps({"ok": False, "error": str(exc)}, ensure_ascii=False, indent=2),
+            is_error=True,
+        )
+    return _text_result(json.dumps(result, ensure_ascii=False, indent=2))
+
+
+def _tool_iot_vision_observe(arguments: dict) -> dict:
+    device_id = str(arguments.get("device_id", ""))
+    try:
+        limit = max(1, min(int(arguments.get("limit", 30) or 30), 200))
+    except (TypeError, ValueError):
+        return _text_result("limit must be an integer", is_error=True)
+    if isinstance(RUNTIME, RemoteRuntime):
+        result = RUNTIME.vision_observations(limit=limit, device_id=device_id)
+    else:
+        services = _services()
+        if services is None:
+            return _text_result("observation service unavailable", is_error=True)
+        rows = services[0].observations(
+            limit=limit if device_id else min(limit * 4, 500),
+            device_id=device_id,
+        )
+        result = [
+            row for row in rows if str(row.get("type", "")).startswith("vision.")
+        ][-limit:]
+    return _text_result(
+        json.dumps({"observations": result}, ensure_ascii=False, indent=2)
+    )
+
+
 def _tool_iot_missions(arguments: dict) -> dict:
     try:
         limit = int(arguments.get("limit", 50) or 50)
@@ -1136,6 +1269,9 @@ HANDLERS = {
     "iot_skill_status": _tool_iot_skill_status,
     "iot_observations": _tool_iot_observations,
     "iot_observe": _tool_iot_observe,
+    "iot_vision_status": _tool_iot_vision_status,
+    "iot_vision_snapshot": _tool_iot_vision_snapshot,
+    "iot_vision_observe": _tool_iot_vision_observe,
     "iot_missions": _tool_iot_missions,
     "iot_mission_create": _tool_iot_mission_create,
     "iot_mission_status": _tool_iot_mission_status,

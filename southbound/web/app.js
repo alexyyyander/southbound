@@ -21,6 +21,8 @@
     access: null,
     bindings: [],
     events: [],
+    interaction: null,
+    vision: null,
     scope: "all",
     selectedBinding: null,
     pulseTimer: null,
@@ -124,6 +126,7 @@
     zigbee2mqtt: ["Zigbee2MQTT", "MQTT · Zigbee 桥接", "ZB"],
     ble: ["Bluetooth LE", "GATT · Read / Notify", "BLE"],
     nfc: ["NFC", "UID · NDEF / Tag", "NFC"],
+    camera: ["Camera", "RTSP · USB · Synthetic", "CAM"],
   };
 
   function buildTopoNodes() {
@@ -467,6 +470,106 @@
     }
   }
 
+  async function refreshVision() {
+    try {
+      const data = await api("/api/vision/status");
+      state.vision = data;
+      renderVision();
+    } catch (error) {
+      console.error("vision refresh failed", error);
+      const status = $("#vision-state");
+      if (status) status.textContent = "视觉服务不可用";
+    }
+  }
+
+  function renderVision() {
+    const grid = $("#vision-grid");
+    if (!grid) return;
+    const data = state.vision || {};
+    const cameras = data.cameras || [];
+    const perception = data.perception || {};
+    $("#vision-state").textContent = data.ok
+      ? `${cameras.length} 路摄像头 · ${perception.running ? "感知运行中" : "感知未启动"}`
+      : (data.error || "camera adapter 未启用");
+    $("#vision-summary").textContent = cameras.length
+      ? `运动事件 ${perception.events || 0} · 最近采样 ${formatTime(perception.last_tick)} · 快照仅存本机`
+      : "摄像头接入后会在这里显示快照、运动状态和本地证据。";
+    if (!cameras.length) {
+      grid.innerHTML = `<div class="empty-state"><span>◉</span><p>还没有摄像头</p><small>${data.ok ? "点击“接入演示摄像头”，或启用配置中的 camera adapter。" : "camera adapter 未启用；检查 config/access.local.json。"}</small></div>`;
+      return;
+    }
+    grid.innerHTML = cameras.map(camera => {
+      const evidence = camera.last_snapshot || {};
+      const frame = evidence.url
+        ? `<img src="${esc(evidence.url)}" alt="${esc(camera.name)} 最新快照" loading="lazy">`
+        : `<div class="vision-card__placeholder"><span>◉</span><small>尚无快照</small></div>`;
+      const badge = camera.motion
+        ? `<span class="vision-card__badge is-motion">MOTION</span>`
+        : `<span class="vision-card__badge">STILL</span>`;
+      const evidenceText = evidence.sha256
+        ? `证据 ${esc(evidence.sha256.slice(0, 12))}… · ${esc(formatTime(evidence.captured_at))}`
+        : `运动检测：${camera.perception ? "已启用" : "未启用"}`;
+      return `<article class="vision-card" data-camera="${esc(camera.device_id)}">
+        <div class="vision-card__frame">${frame}${badge}<span class="vision-card__source">${esc(camera.source)}</span></div>
+        <div class="vision-card__body">
+          <div><h3>${esc(camera.name)}</h3><p class="mono">${esc(camera.device_id)} · ${esc(camera.room || "未分区")}</p></div>
+          <div class="vision-card__actions">
+            <button class="text-button" type="button" data-vision-snapshot="${esc(camera.device_id)}">拍摄</button>
+            <button class="text-button" type="button" data-vision-remove="${esc(camera.device_id)}">移除</button>
+          </div>
+        </div>
+        <p class="vision-card__evidence small">${evidenceText}</p>
+      </article>`;
+    }).join("");
+  }
+
+  async function captureVision(deviceId, button) {
+    button.disabled = true;
+    try {
+      await api(`/api/vision/${encodeURIComponent(deviceId)}/snapshot`, { method: "POST" });
+      await refreshVision();
+    } catch (error) {
+      notify(`拍摄失败：${error.message}`);
+    } finally {
+      button.disabled = false;
+    }
+  }
+
+  async function commissionDemoCamera() {
+    if ((state.vision?.cameras || []).some(camera => camera.device_id === "demo_camera")) {
+      notify("演示摄像头已在运行。");
+      await refreshVision();
+      return;
+    }
+    const button = $("#vision-demo");
+    button.disabled = true;
+    try {
+      await api("/api/northbound/commission", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          adapter: "camera",
+          kind: "camera",
+          device_id: "demo_camera",
+          name: "演示摄像头",
+          room: "客厅",
+          protocol: "Synthetic",
+          tier: "T2",
+          source: "synthetic",
+          perception: true,
+          confirm: true,
+        }),
+      });
+      await refreshAccess();
+      await refreshVision();
+      notify("演示摄像头已接入，感知服务开始采样。");
+    } catch (error) {
+      notify(`接入失败：${error.message}`);
+    } finally {
+      button.disabled = false;
+    }
+  }
+
   async function decommissionDevice(deviceId) {
     try {
       await api("/api/northbound/decommission", {
@@ -476,6 +579,7 @@
       });
       await refreshSim();
       await refreshAccess();
+      await refreshVision();
     } catch (error) {
       console.error("decommission failed", error);
       notify(`移除失败：${error.message}`);
@@ -492,6 +596,12 @@
     const selected = kinds.value;
     kinds.replaceChildren(...(spec?.kinds || []).map(kind => new Option(kind, kind)));
     if ((spec?.kinds || []).includes(selected)) kinds.value = selected;
+    if (
+      kinds.value === "camera" &&
+      form.elements.namedItem("capabilities")?.value.trim() === "read"
+    ) {
+      form.elements.namedItem("capabilities").value = "snapshot,read";
+    }
   }
 
   async function openOnboard() {
@@ -776,6 +886,20 @@
         console.error("reset failed", error);
       }
     });
+
+    $("#vision-refresh").addEventListener("click", refreshVision);
+    $("#vision-demo").addEventListener("click", commissionDemoCamera);
+    $("#vision-grid").addEventListener("click", (event) => {
+      const snapshot = event.target.closest("[data-vision-snapshot]");
+      if (snapshot) {
+        captureVision(snapshot.dataset.visionSnapshot, snapshot);
+        return;
+      }
+      const remove = event.target.closest("[data-vision-remove]");
+      if (remove) {
+        decommissionDevice(remove.dataset.visionRemove);
+      }
+    });
   }
 
   function shorten(text, limit = 42) {
@@ -803,6 +927,17 @@
       case "device.connection":
       case "device.error":
         return `${event.simulated ? "模拟 · " : ""}${event.type} · ${shorten(event.name || event.device_id, 24)}`;
+      case "vision.motion":
+        return `vision · motion · ${shorten(event.name || event.device_id, 18)} · ${(
+          (event.data?.ratio || 0) * 100
+        ).toFixed(1)}%`;
+      case "vision.motion_stopped":
+        return `vision · still · ${shorten(event.name || event.device_id, 18)}`;
+      case "observation.recorded":
+        return `observation · ${event.observation_type || "recorded"} · ${shorten(
+          event.device_id || event.mission_id,
+          18
+        )}`;
       case "commission.request":
         return `northbound · commission · ${shorten(
           event.name || event.device_id,
@@ -884,6 +1019,7 @@
       track.classList.add("is-active");
     }
     if (["commission.result", "decommission.result"].includes(event.type)) refreshAccess();
+    if (String(event.type || "").startsWith("vision.")) refreshVision();
   }
 
   function initEvents() {
@@ -925,13 +1061,14 @@
     bindEvents();
     renderSuggestions();
     try {
-      const [inventory, deep, sim, access, catalog, bindings] = await Promise.all([
+      const [inventory, deep, sim, access, catalog, bindings, vision] = await Promise.all([
         api("/api/inventory").catch(() => ({})),
         api("/api/deep_scan").catch(() => ({})),
         api("/api/sim/devices").catch(() => ({ devices: [] })),
         api("/api/access/status").catch(() => null),
         api("/api/access/catalog").catch(() => null),
         api("/api/access/devices").catch(() => ({ devices: [] })),
+        api("/api/vision/status").catch(() => null),
       ]);
       state.inventory = inventory || {};
       state.devices = state.inventory.devices || [];
@@ -940,14 +1077,17 @@
       state.access = access;
       state.bindings = bindings.devices || [];
       state.catalog = catalog || { tools: [] };
+      state.vision = vision;
       renderStats();
       renderRail();
       renderTopology();
       renderTierFilters();
       renderFleet();
       renderSim();
+      renderVision();
       initEvents();
       window.setInterval(pollSim, 4000);
+      window.setInterval(refreshVision, 6000);
     } catch (error) {
       console.error("init failed", error);
       $("#agent-trace").innerHTML = `<p class="summary is-error">无法加载演示数据：${esc(

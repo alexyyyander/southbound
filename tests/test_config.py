@@ -3,6 +3,7 @@ import unittest
 from pathlib import Path
 
 from southbound.access.config import build_hub, load_config
+from southbound.access.errors import PolicyDenied
 from southbound.simulator import Simulator
 
 
@@ -34,23 +35,74 @@ class ConfigTest(unittest.TestCase):
 
     def test_bridge_factories_preserve_connection_options(self):
         from unittest.mock import patch
-        with tempfile.TemporaryDirectory() as tmp, patch.dict("os.environ", {"TEST_HA_TOKEN": "token"}):
-            hub = build_hub({"adapters": {
-                "sim": {"enabled": False},
-                "home_assistant": {"enabled": True, "base_url": "http://localhost:8123",
-                                   "token_env": "TEST_HA_TOKEN"},
-                "mqtt": {"enabled": True, "host": "mqtt.example", "port": 1884},
-                "zigbee2mqtt": {"enabled": True, "client_id": "z2m-test", "devices": [
-                    {"device_id": "z2m:test", "friendly_name": "test", "kind": "light"}]},
-            }}, audit_path=Path(tmp) / "audit.jsonl")
+
+        with (
+            tempfile.TemporaryDirectory() as tmp,
+            patch.dict("os.environ", {"TEST_HA_TOKEN": "token"}),
+        ):
+            hub = build_hub(
+                {
+                    "adapters": {
+                        "sim": {"enabled": False},
+                        "home_assistant": {
+                            "enabled": True,
+                            "base_url": "http://localhost:8123",
+                            "token_env": "TEST_HA_TOKEN",
+                        },
+                        "mqtt": {"enabled": True, "host": "mqtt.example", "port": 1884},
+                        "zigbee2mqtt": {
+                            "enabled": True,
+                            "client_id": "z2m-test",
+                            "devices": [
+                                {
+                                    "device_id": "z2m:test",
+                                    "friendly_name": "test",
+                                    "kind": "light",
+                                }
+                            ],
+                        },
+                    }
+                },
+                audit_path=Path(tmp) / "audit.jsonl",
+            )
             self.addCleanup(hub.close)
             self.assertEqual(hub.adapters["home_assistant"].token, "token")
             self.assertEqual(hub.adapters["mqtt"].port, 1884)
             self.assertEqual(hub.adapters["zigbee2mqtt"].client_id, "z2m-test")
-            self.assertEqual(hub.adapters["zigbee2mqtt"].devices[0]["state_topic"], "zigbee2mqtt/test")
+            self.assertEqual(
+                hub.adapters["zigbee2mqtt"].devices[0]["state_topic"],
+                "zigbee2mqtt/test",
+            )
+
+    def test_camera_factory_and_privacy_policy(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            hub = build_hub(
+                {
+                    "policy": {"allow_camera": False},
+                    "adapters": {
+                        "sim": {"enabled": False},
+                        "camera": {
+                            "enabled": True,
+                            "snapshot_dir": str(Path(tmp) / "vision"),
+                            "cameras": [{"device_id": "cam", "source": "synthetic"}],
+                        },
+                    },
+                },
+                audit_path=Path(tmp) / "audit.jsonl",
+            )
+            self.addCleanup(hub.close)
+            self.assertFalse(hub.policy.config.allow_camera)
+            self.assertEqual(hub.devices()[0]["kind"], "camera")
+            with self.assertRaises(PolicyDenied):
+                hub.call("cam", "snapshot")
+            decision = hub.policy.decide_commission(
+                "camera", "camera", "客厅", confirm=True
+            )
+            self.assertFalse(decision.allowed)
 
     def test_environment_config_override(self):
         from unittest.mock import patch
+
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "access.json"
             path.write_text('{"adapters":{"sim":{"enabled":false}}}')

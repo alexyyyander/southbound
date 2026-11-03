@@ -218,6 +218,12 @@ def _event_observation(event: dict[str, Any]) -> dict[str, Any] | None:
             "modality": "device",
             "data": event.get("data") or {},
         }
+    if event_type.startswith("vision."):
+        return {
+            "type": event_type,
+            "modality": "vision",
+            "data": event.get("data") or {},
+        }
     if event_type == "presence":
         return {
             "type": "presence",

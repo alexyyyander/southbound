@@ -97,6 +97,32 @@ northbound · ready · 演示传感器 · 1 capabilities
 
 新的虚拟端点在模拟端点区域出现。它不是内置设备，右下角有“移除”按钮；点击会发出 `decommission` 事件并撤销绑定。
 
+## 3.1 视觉感知
+
+滚动到 **视觉感知** 面板，点击“接入演示摄像头”：
+
+1. 通过受控 onboarding 创建 `demo_camera`（source=`synthetic`，perception=true）；
+2. `PerceptionService` 每 1.5 秒采样一次，运动状态在卡片上显示为 `STILL` / `MOTION`；
+3. 快照、SHA-256 证据和采集时间只落在本机 `data/vision/`；
+4. 点击“拍摄”会经 AccessHub 重新抓一帧；点击“移除”撤销摄像头。
+
+事件流里会出现：
+
+```text
+vision · motion · 演示摄像头 · 5.6%
+observation · vision.motion · demo_camera
+vision · still · 演示摄像头
+```
+
+命令行查看状态或抓图：
+
+```bash
+python3 -m southbound vision
+python3 -m southbound vision --snapshot demo_camera
+```
+
+原始帧不会进入 prompt，也不会通过 SSE 广播；详见 [视觉感知](VISION.md)。
+
 ## 4. CLI Demo
 
 ```bash

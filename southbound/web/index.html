@@ -18,6 +18,7 @@
       <a href="#activity"><span>≋</span>事件与调用<span class="nav-index">02</span></a>
       <a href="#controls"><span>⊞</span>设备实验台<span class="nav-index">03</span></a>
       <a href="#fleet"><span>◎</span>网络发现<span class="nav-index">04</span></a>
+      <a href="#vision"><span>◉</span>视觉感知<span class="nav-index">05</span></a>
     </nav>
     <div class="sidebar__bottom">
       <a class="scene-link" href="/scene"><span>◇</span><div>空间实验<small>打开 2.5D 房间</small></div><span>↗</span></a>
@@ -81,6 +82,27 @@
         <div class="bench__actions">
           <span class="small">状态仅保存在当前运行时</span>
           <button id="sim-reset" class="text-button" type="button">重置模拟状态</button>
+        </div>
+      </section>
+
+      <section class="panel vision" id="vision" aria-labelledby="vision-title">
+        <div class="panel__head">
+          <div>
+            <p class="eyebrow">LOCAL PERCEPTION</p>
+            <h2 id="vision-title">视觉感知 <span class="badge badge--amber">本地</span></h2>
+            <p>快照留在本机；运动事件进入 observation，不把原始帧送进模型。</p>
+          </div>
+          <div class="vision__actions">
+            <span id="vision-state" class="small">读取摄像头…</span>
+            <button id="vision-demo" class="text-button" type="button">接入演示摄像头</button>
+          </div>
+        </div>
+        <div id="vision-grid" class="vision-grid" aria-live="polite">
+          <div class="empty-state"><span>◉</span><p>还没有摄像头</p><small>点击“接入演示摄像头”，或启用配置中的 camera adapter。</small></div>
+        </div>
+        <div class="vision__foot">
+          <span id="vision-summary" class="small">感知服务未启动</span>
+          <button id="vision-refresh" class="text-button" type="button">刷新</button>
         </div>
       </section>
 
@@ -161,6 +183,23 @@
           </label>
           <label data-field="state_topic">MQTT state topic
             <input name="state_topic" placeholder="demo/state">
+          </label>
+          <label data-field="source">Camera source
+            <select name="source">
+              <option value="synthetic">synthetic</option>
+              <option value="file">file</option>
+              <option value="usb">usb</option>
+              <option value="rtsp">rtsp</option>
+            </select>
+          </label>
+          <label data-field="path">Camera file path
+            <input name="path" placeholder="/path/to/frame.jpg">
+          </label>
+          <label data-field="url_env">RTSP URL env
+            <input name="url_env" placeholder="CAMERA_RTSP_URL">
+          </label>
+          <label data-field="index">USB index
+            <input name="index" type="number" min="0" value="0">
           </label>
           <label class="onboard__wide" data-field="state">Sim state JSON
             <textarea name="state" rows="2">{"temperature":22.5,"humidity":45,"battery":90}</textarea>

@@ -7,7 +7,7 @@
 <p align="center"><strong>本地优先的 IoT Agent 南向接入层</strong></p>
 
 <p align="center">
-  <img alt="version 0.13.0" src="https://img.shields.io/badge/version-0.13.0-0F7D78?style=flat-square">
+  <img alt="version 0.14.0" src="https://img.shields.io/badge/version-0.14.0-0F7D78?style=flat-square">
   <img alt="Python 3.10+" src="https://img.shields.io/badge/python-3.10%2B-12262F?style=flat-square">
   <img alt="MIT" src="https://img.shields.io/badge/license-MIT-CF4A29?style=flat-square">
   <img alt="Alpha" src="https://img.shields.io/badge/status-alpha-70848B?style=flat-square">
@@ -58,7 +58,8 @@
 | **接入工具层** | DeviceBinding / Capability / Risk / Tool Catalog / JSON Schema 参数校验 |
 | **策略与审计** | read_only / supervised / autonomous；每次调用写 JSONL 审计 |
 | **受控 onboarding** | 发现 → 授权 → 绑定 adapter/策略 → 工具目录；支持撤销与持久化 |
-| **多协议 adapter** | Simulator、Home Assistant REST + 可选 WebSocket 事件、MQTT、Zigbee2MQTT、BLE GATT、NFC；BLE/NFC 已通过模拟与驱动替身测试，待硬件验收 |
+| **多协议 adapter** | Simulator、Home Assistant REST + 可选 WebSocket 事件、MQTT、Zigbee2MQTT、BLE GATT、NFC、Camera（synthetic/file/USB/RTSP）；BLE/NFC/摄像头真实硬件待验收 |
+| **视觉感知** | 摄像头快照、纯本地运动检测、`vision.*` observation、本地证据与保留策略；原始帧不进模型、不上传 |
 | **运行时与事件流** | SouthboundRuntime + EventBus + SSE；`serve` 可作为共享 runtime，MCP/CLI 通过 `SOUTHBOUND_REMOTE_URL` 连接 |
 | **LAN 设备图** | SQLite 持久化设备身份、能力、来源、控制范围与缓存状态；合并 inventory / deep scan / commissioning / access binding |
 | **共享 runtime** | 一个设备图、策略和审计供 Dashboard / MCP / CLI 共用；支持 `southbound mcp --remote` 与 Bearer token |
@@ -66,7 +67,7 @@
 | **2.5D 房间实验** | `GET /scene`：可移动 avatar、presence 信号、点击设备、自动反射与回读验证 |
 | **Splat 预览** | `/scene` 内切换 WebGL 合成 splat：轨道旋转、设备热点、avatar 投影；同一控制层 |
 | **可视化** | 网络拓扑、设备清单、模拟端点、Agent 控制台、接入表单 |
-| **MCP** | 28 个工具：发现、深扫、LAN 图、交互端点、skills、observations、missions、模拟器、接入层、受控 onboarding |
+| **MCP** | 31 个工具：发现、深扫、LAN 图、交互端点、skills、observations、missions、视觉、模拟器、接入层、受控 onboarding |
 | **无硬件闭环** | 六个虚拟端点 + 确定性 agent trace，没有设备也能跑 |
 
 BLE / NFC 的配置、事件入口与无硬件演示见 [硬件适配器说明](docs/HARDWARE_ADAPTERS.md)。
@@ -84,7 +85,8 @@ python3 -m southbound serve
 1. 在 Agent 控制台输入 `打开客厅灯并关掉书房插座`；
 2. 顶部 flowbar 出现 `intent → command → state → result`；
 3. 点击“模拟端点”下方的 **＋ 接入设备**，提交一个虚拟传感器；
-4. 新端点出现在面板，可以继续控制或点“移除”撤销。
+4. 新端点出现在面板，可以继续控制或点“移除”撤销；
+5. 滚动到 **视觉感知**，点“接入演示摄像头”；感知服务开始采样，快照、STILL/MOTION 与本地证据会出现在卡片里。
 
 然后打开 `http://127.0.0.1:8765/scene` 进入 **2.5D 房间实验**：
 
@@ -134,6 +136,12 @@ Home Assistant WebSocket 状态事件需要：
 
 ```bash
 python3 -m pip install -e ".[ha]"
+```
+
+USB 摄像头需要 OpenCV，RTSP 需要系统 `ffmpeg`：
+
+```bash
+python3 -m pip install -e ".[vision]"
 ```
 
 完整演示（面板、CLI、MCP、故障排查）见 [docs/DEMO.md](docs/DEMO.md)。
@@ -389,6 +397,7 @@ southbound/
 │   ├── skills.py            # SkillRegistry / SkillRunner / manifest 校验
 │   ├── observations.py      # event → observation / situation
 │   ├── missions.py          # mission 状态机与审批
+│   ├── vision.py            # MotionDetector / PerceptionService
 │   ├── discover.py          # ARP / mDNS / SSDP
 │   ├── survey.py            # 跨平台 survey / readiness / 报告
 │   ├── deep_scan.py         # 端口与服务指纹
@@ -409,15 +418,16 @@ southbound/
 │   │   └── adapters/
 │   │       ├── base.py
 │   │       ├── sim.py
+│   │       ├── camera.py
 │   │       ├── home_assistant.py
 │   │       └── mqtt.py
 │   └── web/                 # 观测站面板 + scene.html / interaction.html / splat.js
 ├── assets/                  # Logo、社交预览与品牌说明
 ├── config/access.example.json
 ├── deploy/systemd/          # Pi 常驻 harness 示例
-├── docs/                    # About、架构、协议、演示、harness、接入层、onboarding、芯片、信号、硬件、扫描
+├── docs/                    # About、架构、协议、演示、harness、接入层、onboarding、vision、芯片、信号、硬件、扫描
 ├── skills/                  # 版本化 edge skill manifests
-├── tests/                   # 152 项 unittest
+├── tests/                   # 168 项 unittest
 ├── data/                    # 本地生成，gitignored
 ├── viz_server.py            # 面板兼容入口
 ├── mcp_server.py            # MCP 兼容入口
@@ -444,7 +454,7 @@ make lint     # ruff check .
 make build    # wheel + sdist
 ```
 
-当前 152 项标准库测试覆盖分级规则、模拟器、agent 目标拆分、能力校验、策略、审计、工具目录、运行时/事件总线、持久化 LAN 图与事件日志、多硬件交互端点/会话/路由、远程 runtime client/token、受控接入与持久化、2.5D 场景 presence/自动验证、survey 解析/readiness、skill manifest 校验/trigger/shadow/verify、HA 适配器映射、MQTT payload 和 CLI 解析，以及适配器注册、BLE/NFC 模拟读写、设备事件、驱动边界和资源释放。
+当前 168 项标准库测试覆盖分级规则、模拟器、agent 目标拆分、能力校验、策略、审计、工具目录、运行时/事件总线、持久化 LAN 图与事件日志、多硬件交互端点/会话/路由、远程 runtime client/token、受控接入与持久化、2.5D 场景 presence/自动验证、survey 解析/readiness、skill manifest 校验/trigger/shadow/verify、HA 适配器映射、MQTT payload 和 CLI 解析、摄像头快照/运动检测/observation 投影/隐私策略，以及适配器注册、BLE/NFC 模拟读写、设备事件、驱动边界和资源释放。
 
 CI 在 Python 3.10–3.13 上跑 ruff、单元测试和 wheel/sdist 构建。
 
@@ -459,6 +469,7 @@ CI 在 Python 3.10–3.13 上跑 ruff、单元测试和 wheel/sdist 构建。
 - [技术架构与可行性](docs/ARCHITECTURE.md)
 - [相关研究与竞品](docs/RELATED_WORK.md) — Ori、AssetOpsBench、WoT/IBN、MCP 安全
 - [Edge Skills 与硬件条件](docs/EDGE_SKILLS.md) — skill 合约、T0–T3 硬件、电源/网络/执行器/安全/隐私
+- [视觉感知](docs/VISION.md) — 摄像头来源、快照/运动 observation、本地证据与隐私边界
 - [Observations 与 Situation](docs/OBSERVATIONS.md) — 事件归一化、observation store、situation snapshot
 - [Missions](docs/MISSIONS.md) — proposed/approved/running/verified 状态机、审批与回读
 - [共享 Runtime Service](docs/RUNTIME_SERVICE.md) — 一个设备图供 Dashboard / MCP / CLI 共用
@@ -479,7 +490,9 @@ CI 在 Python 3.10–3.13 上跑 ruff、单元测试和 wheel/sdist 构建。
 
 - LAN 发现、深扫、T0–T3 分级；
 - AccessHub 策略/审计/能力目录；
-- 六类 adapter、六个虚拟端点；BLE/NFC 尚待真实硬件验收；
+- 七类 adapter、六个虚拟端点；BLE/NFC 尚待真实硬件验收；
+- Camera adapter：synthetic/file/USB/RTSP 快照，`policy.allow_camera` 独立隐私门；
+- 视觉感知：纯本地运动检测、`vision.*` observation、本地证据保留、MCP/HTTP/面板接入；
 - SouthboundRuntime + EventBus + SSE + 面板 flowbar；
 - 共享 runtime service：Dashboard / MCP / CLI 可共用一个设备图和审计；
 - 持久化 LAN 设备图：SQLite 身份合并、控制范围、来源和缓存状态；
@@ -495,8 +508,8 @@ CI 在 Python 3.10–3.13 上跑 ruff、单元测试和 wheel/sdist 构建。
 - 2.5D 房间实验：presence 信号、低风险自动反射、Agent notice、回读验证；
 - WebGL 合成 splat 预览：轨道相机、设备热点、avatar 投影；
 - 无主机 `survey`：Wi-Fi/BLE/radio 证据、服务指纹、Pi/Linux 支持、readiness 报告；
-- 28 个 MCP 工具；
-- 152 项测试、CI、wheel/sdist。
+- 31 个 MCP 工具；
+- 168 项测试、CI、wheel/sdist。
 
 **下一步**
 
@@ -505,6 +518,8 @@ CI 在 Python 3.10–3.13 上跑 ruff、单元测试和 wheel/sdist 构建。
 - 真实交互端点：Pi/ESP32/手机客户端、音频流、离线降级与跨端 handoff；
 - Matter 原生 controller、ESPHome 原生 API；
 - 真实 ESP32/Matter/Zigbee/BLE/NFC 硬件验证；
+- 视觉下一阶段：真实 RTSP/USB 摄像头验收、ONNX/Frigate 检测器、模型注册表与本地 VLM 描述；
+- **异步 Mission worker**：长时盯守、巡逻、录像任务需要持久队列、租约、取消与重试；
 - **真实 3DGS 视觉层（可选）**：当前已有合成 splat 预览；真实照片级效果需要采集视频、COLMAP + nerfstudio/gsplat 训练，再把 `.splat` 资产接入同一 WebGL 层。2.5D 地图仍是设备锚点、碰撞、策略与审计的权威层；大文件放 `data/` 或 Git LFS，不提交真实家庭影像。
 
 ## 安全与边界
@@ -513,6 +528,8 @@ CI 在 Python 3.10–3.13 上跑 ruff、单元测试和 wheel/sdist 构建。
 - 不做漏洞利用、认证绕过或自传播；onboarding 必须由所有者确认。
 - 面板与 MCP 默认只绑定 `127.0.0.1`，不要把控制接口暴露到公网。
 - 真实门锁、电源、燃气等执行器必须走策略 + 确认；LLM 不能直接绕过 `AccessHub`。
+- 摄像头是隐私敏感设备：快照默认只存本机，`policy.allow_camera` 独立于 risk；
+  不做人脸识别、不上传云端、不把原始帧送进模型。
 - 接入记录不含 token/password；密钥只从环境变量读取。
 - 物理设备的安全、电气与法规责任由使用者承担。
 

@@ -84,6 +84,11 @@ When remote mode is active, MCP tools use the HTTP runtime surface:
 - `GET /api/observations`
 - `GET /api/observations/<observation_id>`
 - `GET /api/situation`
+- `GET /api/vision/status`
+- `GET /api/vision/cameras`
+- `POST /api/vision/<device_id>/snapshot`
+- `GET /api/vision/snapshots/<device_id>/<filename>`
+- `GET /api/vision/observations`
 - `GET /api/missions`
 - `GET /api/missions/<mission_id>`
 - `POST /api/missions`
@@ -125,6 +130,13 @@ state.
 - The service is the **only** action authority. The remote client cannot
   enforce policy; the service's `AccessHub` does.
 - MCP is still the tool façade; it is not the runtime itself.
+- Camera access is local evidence first: `POST /api/vision/<id>/snapshot`
+  returns a local URI/hash, and `GET /api/vision/snapshots/...` serves only
+  files under the configured snapshot directory. Raw frames are not pushed
+  through the event stream.
+- The dashboard injects an empty camera adapter by default so the vision panel
+  can commission a synthetic demo camera; other entry points need an explicit
+  `camera` section in configuration.
 - CLI is a client in remote mode; it must not write a separate
   `data/commissioned.json` while the service is running.
 - The dashboard already uses the service's in-process runtime.

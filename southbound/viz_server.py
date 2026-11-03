@@ -30,9 +30,11 @@ import os
 import queue
 import webbrowser
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from pathlib import Path
 from urllib.parse import parse_qs, unquote, urlparse
 
 from .access.commissioning import CommissionStore
+from .access.config import load_config
 from .access.errors import AccessError
 from .event_store import EventStore
 from .graph import LANGraph
@@ -51,10 +53,32 @@ from .runtime import EventBus, SouthboundRuntime
 from .scene import SceneController
 from .service_auth import is_authorized
 from .skills import SkillRegistry, SkillRunner
+from .vision import PerceptionService
 
 STATE_DB = DATA_DIR / "lan_state.sqlite3"
 GRAPH = LANGraph(STATE_DB)
+
+
+def _dashboard_config() -> dict:
+    """Make the camera adapter available for the dashboard demo.
+
+    Other entry points stay explicit: only ``southbound serve`` injects an
+    empty, enabled camera adapter so the vision panel can commission a
+    synthetic camera without editing configuration first. An explicit
+    ``camera`` section from the user's config always wins.
+    """
+
+    config = load_config()
+    adapters = config.get("adapters")
+    if not isinstance(adapters, dict):
+        adapters = {}
+        config["adapters"] = adapters
+    adapters.setdefault("camera", {"enabled": True, "cameras": []})
+    return config
+
+
 RUNTIME = SouthboundRuntime(
+    config=_dashboard_config(),
     store=CommissionStore(DATA_DIR / "commissioned.json"),
     graph=GRAPH,
     events=EventBus(store=EventStore(STATE_DB)),
@@ -64,6 +88,7 @@ HUB = RUNTIME.hub
 SCENE = SceneController(RUNTIME)
 SKILLS = SkillRegistry.from_directory(SKILLS_DIR)
 SKILL_RUNNER = SkillRunner(RUNTIME, SKILLS, mode="shadow")
+PERCEPTION = PerceptionService(RUNTIME)
 OBSERVATIONS = ObservationService(
     RUNTIME, ObservationStore(DATA_DIR / "observations.sqlite3")
 )
@@ -90,11 +115,25 @@ def _load_json(name: str) -> dict:
         return {}
 
 
+def _vision_status() -> dict:
+    adapter = HUB.adapters.get("camera")
+    if adapter is None:
+        return {
+            "ok": False,
+            "error": "camera adapter not enabled",
+            "cameras": [],
+            "perception": PERCEPTION.status(),
+        }
+    status = adapter.status()
+    status["perception"] = PERCEPTION.status()
+    return status
+
+
 RUNTIME.ingest_lan(_load_json("inventory.json"), _load_json("deep_scan.json"))
 
 
 class Handler(BaseHTTPRequestHandler):
-    server_version = "SouthboundDemo/0.13"
+    server_version = "SouthboundDemo/0.14"
 
     def log_message(self, fmt: str, *args) -> None:  # keep stdout clean
         print(f"[viz] {self.address_string()} {fmt % args}", flush=True)
@@ -248,6 +287,42 @@ class Handler(BaseHTTPRequestHandler):
                     limit=limit,
                 )
             )
+            return
+        if path in ("/api/vision/status", "/api/vision/cameras"):
+            self._json(_vision_status())
+            return
+        if path == "/api/vision/observations":
+            query = parse_qs(parsed.query)
+            try:
+                limit = max(1, min(int(query.get("limit", ["50"])[0] or 50), 200))
+            except ValueError:
+                limit = 50
+            device_id = query.get("device_id", [""])[0]
+            rows = OBSERVATIONS.observations(
+                limit=limit if device_id else min(limit * 4, 500),
+                device_id=device_id,
+            )
+            rows = [
+                row for row in rows if str(row.get("type", "")).startswith("vision.")
+            ]
+            self._json({"observations": rows[-limit:]})
+            return
+        if path.startswith("/api/vision/snapshots/"):
+            remainder = unquote(path[len("/api/vision/snapshots/") :])
+            parts = remainder.split("/", 1)
+            if len(parts) != 2:
+                self._json({"error": "invalid snapshot path"}, status=400)
+                return
+            adapter = HUB.adapters.get("camera")
+            candidate = (
+                adapter.snapshot_path(parts[0], parts[1])
+                if adapter is not None
+                else None
+            )
+            if candidate is None:
+                self._json({"error": "snapshot not found"}, status=404)
+                return
+            self._image(candidate)
             return
         if path == "/api/missions":
             query = parse_qs(parsed.query)
@@ -537,6 +612,29 @@ class Handler(BaseHTTPRequestHandler):
                 return
             self._json(result)
             return
+        if path.startswith("/api/vision/") and path.endswith("/snapshot"):
+            device_id = unquote(path[len("/api/vision/") : -len("/snapshot")]).strip(
+                "/"
+            )
+            if not device_id or "/" in device_id:
+                self._json({"ok": False, "error": "invalid camera id"}, status=400)
+                return
+            try:
+                result = RUNTIME.call(device_id, "snapshot")
+            except AccessError as exc:
+                self._json(
+                    {
+                        "ok": False,
+                        "error": str(exc),
+                        "requires_confirmation": bool(
+                            getattr(exc, "requires_confirmation", False)
+                        ),
+                    },
+                    status=400,
+                )
+                return
+            self._json(result)
+            return
 
         parts = [part for part in path.split("/") if part]
         if (
@@ -614,6 +712,20 @@ class Handler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(data)
 
+    def _image(self, path: Path) -> None:
+        try:
+            data = path.read_bytes()
+        except OSError:
+            self._json({"error": "snapshot not readable"}, status=404)
+            return
+        content_type = mimetypes.guess_type(path.name)[0] or "application/octet-stream"
+        self.send_response(200)
+        self.send_header("Content-Type", content_type)
+        self.send_header("Content-Length", str(len(data)))
+        self.send_header("Cache-Control", "no-store")
+        self.end_headers()
+        self.wfile.write(data)
+
     def _static(self, path: str) -> None:
         rel = unquote(path).lstrip("/") or "index.html"
         candidate = (WEB_DIR / rel).resolve()
@@ -661,12 +773,14 @@ def serve(
         webbrowser.open(url)
     OBSERVATIONS.start()
     SKILL_RUNNER.start()
+    PERCEPTION.start()
     try:
         server.serve_forever()
     except KeyboardInterrupt:
         print("\nstopped", flush=True)
     finally:
         server.server_close()
+        PERCEPTION.stop()
         SKILL_RUNNER.stop()
         OBSERVATIONS.close()
         MISSIONS.close()

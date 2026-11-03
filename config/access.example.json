@@ -5,11 +5,39 @@
     "allowed_rooms": null,
     "allowed_kinds": null,
     "allowed_adapters": null,
-    "allow_auto_commission": false
+    "allow_auto_commission": false,
+    "allow_camera": true
   },
   "adapters": {
     "sim": {
       "enabled": true
+    },
+    "camera": {
+      "enabled": false,
+      "snapshot_dir": "data/vision",
+      "retention_s": 86400,
+      "max_snapshots": 200,
+      "cameras": [
+        {
+          "device_id": "entry_camera",
+          "name": "入户摄像头",
+          "room": "玄关",
+          "source": "synthetic",
+          "perception": true,
+          "tier": "T2",
+          "protocol": "Synthetic"
+        },
+        {
+          "device_id": "living_camera",
+          "name": "客厅摄像头",
+          "room": "客厅",
+          "source": "rtsp",
+          "url_env": "ENTRY_CAMERA_RTSP_URL",
+          "perception": false,
+          "tier": "T2",
+          "protocol": "RTSP"
+        }
+      ]
     },
     "home_assistant": {
       "enabled": false,

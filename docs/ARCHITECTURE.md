@@ -26,7 +26,7 @@
             ┌───────────────────────────┼───────────────────────────┐
             ▼                           ▼                           ▼
       agent.py                  mcp_server.py                viz_server.py
-   inventory 问答 / 方案      stdio MCP（28 tools）        HTTP API + 可视化面板
+   inventory 问答 / 方案      stdio MCP（31 tools）        HTTP API + 可视化面板
             │                           │                           │
             └───────────────┬───────────┘                           ▼
                             ▼                                 southbound/web/
@@ -80,16 +80,17 @@ southbound mcp
 | `graph.py` | 持久化 LAN 图：身份合并、控制范围、来源、缓存状态；SQLite | 可用 |
 | `event_store.py` | 持久事件日志：跨重启 id、最近事件重放 | 可用 |
 | `interaction.py` | 多硬件交互端点、会话、模态路由、跨端 handoff | 可用 |
-| `mcp_server.py` | stdio MCP，28 个工具：发现、深扫、LAN 图、交互端点、skills、observations、missions、模拟器、接入层、受控 onboarding | 可用 |
+| `mcp_server.py` | stdio MCP，31 个工具：发现、深扫、LAN 图、交互端点、skills、observations、missions、vision、模拟器、接入层、受控 onboarding | 可用 |
 | `skills.py` | SkillRegistry / SkillRunner：manifest 校验、trigger/guard、shadow/proposed、AccessHub 执行、verify/fallback | 可用 |
 | `observations.py` | ObservationStore / ObservationService：事件归一化、situation snapshot、SQLite 持久化 | 可用 |
 | `missions.py` | MissionStore / MissionService：proposed→approved→running→verified/failed/cancelled、审批、回读 | 可用 |
+| `vision.py` | MotionDetector / PerceptionService：摄像头采样、灰度帧差、`vision.*` 事件与本地证据 | 可用（MVP） |
 | `cli.py` | 统一 CLI，含 `tools` / `call` / `graph` / `onboard` / `decommission` / `access` | 可用 |
-| `access/` | 设备/能力模型、参数校验、策略、审计、AccessHub、受控接入、六类 adapter | 可用 |
+| `access/` | 设备/能力模型、参数校验、策略、审计、AccessHub、受控接入、七类 adapter（含 camera） | 可用 |
 | `access/commissioning.py` | 已授权设备的非敏感持久化记录与启动恢复 | 可用 |
 | `config/access.example.json` | HA / MQTT / Zigbee2MQTT 配置示例 | 可用 |
 | `southbound/web/` | 观测站风格可视化面板 | 可用 |
-| `tests/` | 标准库 unittest，覆盖分级、模拟闭环、接入层策略与审计、运行时/事件总线、远程 runtime client/token、受控接入、LAN 图与事件持久化、HA WebSocket 事件、多硬件交互、2.5D 场景、survey、skill runtime | 152 项通过 |
+| `tests/` | 标准库 unittest，覆盖分级、模拟闭环、接入层策略与审计、运行时/事件总线、远程 runtime client/token、受控接入、LAN 图与事件持久化、HA WebSocket 事件、多硬件交互、2.5D 场景、survey、skill runtime、摄像头快照/运动检测/observation 投影 | 168 项通过 |
 
 ### 接入工具层
 
@@ -99,7 +100,7 @@ southbound mcp
 - **Capability**：最小可调用动作，带 JSON Schema、风险等级和返回值。
 - **PolicyEngine**：`read_only` / `supervised` / `autonomous`；高风险动作需要 `allow_high_risk`，监督模式还需 `confirm`，自主模式还需 `safe_to_automate`。
 - **AuditLog**：每次调用（含拒绝与参数错误）写 `data/audit.jsonl`。
-- **Adapters**：`sim`、`home_assistant`、`mqtt`、`zigbee2mqtt`、`ble`、`nfc`（后两者待硬件验收，见 [硬件适配器](HARDWARE_ADAPTERS.md)）；ESPHome/Matter 原生协议建议经 HA/MQTT。
+- **Adapters**：`sim`、`home_assistant`、`mqtt`、`zigbee2mqtt`、`ble`、`nfc`、`camera`（BLE/NFC/真实摄像头待硬件验收，见 [硬件适配器](HARDWARE_ADAPTERS.md) 与 [视觉感知](VISION.md)）；ESPHome/Matter 原生协议建议经 HA/MQTT。
 - **Tool Catalog**：把跨设备能力聚合为 agent 可读的目录。
 
 详细契约、配置、扩展指南与完备性评估见 [ACCESS_LAYER.md](ACCESS_LAYER.md)。
@@ -116,6 +117,18 @@ southbound mcp
 - **受控 onboarding**：`commission()` / `decommission()` 执行发现→授权→绑定→工具目录；`confirm` 与策略把“扩散”限制为受控接入，而不是自我复制。
 
 运行时默认进程内；`southbound serve` 可作为共享 runtime service，Dashboard 使用它，MCP/CLI 可通过 `SOUTHBOUND_REMOTE_URL` 连接同一个设备图。见 [共享 Runtime Service](RUNTIME_SERVICE.md)。
+
+### 视觉感知面
+
+`CameraAdapter` 把摄像头作为只读但隐私敏感的设备接入：`snapshot` / `read` 走
+`AccessHub`，带 `sensitivity: camera` 和 `policy.allow_camera` 独立门。来源支持
+synthetic、file、USB（OpenCV）和 RTSP（ffmpeg），快照落本地 `data/vision/`。
+
+`PerceptionService` 以固定间隔采样配置了 `perception` 的摄像头，把帧降采样为
+64×36 灰度并用帧差检测运动，只在状态切换时发布 `vision.motion` /
+`vision.motion_stopped`。事件带置信度、运动比例和本地证据引用；ObservationService
+将其投影为 `modality: vision` 的 observation。原始帧不进入 EventBus、不进 prompt、
+不上传。详细契约与硬件建议见 [视觉感知](VISION.md)。
 
 ## 4. 数据契约
 
@@ -205,7 +218,7 @@ southbound mcp
 | 局域网发现 | ARP + mDNS + SSDP | 高 | 客户端隔离、多播被屏蔽、休眠设备 | 平坦网段可靠；跨 VLAN 需额外部署 |
 | 设备指纹 | 端口 + banner + OUI | 中高 | 随机 MAC、厂商私有协议、设备休眠 | 足够做接入规划；精确识别需 DHCP/DHCPv6 租约 |
 | T0–T3 分级 | 规则引擎 | 中 | 未知厂商、型号歧义 | 作为规划启发式可用，需标注置信度 |
-| 接入工具层 | AccessHub + 六类 adapter | 高 | 真实设备鉴权、协议差异 | 模型/策略/审计/目录已完成；协议执行按 adapter 扩展 |
+| 接入工具层 | AccessHub + 七类 adapter | 高 | 真实设备鉴权、协议差异 | 模型/策略/审计/目录已完成；协议执行按 adapter 扩展 |
 | 受控 onboarding | commission / decommission + 持久化 | 高 | 真实配对、隔离区、审批 UI | 受控接入已跑通；自动扩散明确不做 |
 | 运行时与事件流 | SouthboundRuntime + EventBus + SSE + 持久事件日志 | 高 | 跨进程一致性、背压 | 单进程闭环已跑通；`southbound serve` 已支持共享 runtime，远程认证/TLS 是下一步 |
 | ESP32 / ESPHome 控制 | Sim 完整；真实设备经 HA/MQTT adapter | 高（有硬件） | 刷机、引脚、供电 | 最小闭环最成熟的一条路 |
@@ -215,7 +228,7 @@ southbound mcp
 | LLM planner | 确定性 sim_agent + 工具目录 | 中高 | 工具调用可靠性、延迟、幻觉 | 3B 以上可用；必须保留策略与审计 |
 | “所有硬件”完整自主 | 不支持 | 低（字面） | 凭据、覆盖率、安全 | 预接入集合内可达 L3；全网无授权接管不可行 |
 | 可视化 | 已实现 | 高 | 数据新鲜度 | 适合观测与演示 |
-| MCP 外部 agent | 已实现（28 tools） | 高 | 客户端批准、权限 | 工具边界清晰，可逐步扩展 |
+| MCP 外部 agent | 已实现（31 tools） | 高 | 客户端批准、权限 | 工具边界清晰，可逐步扩展 |
 | 安全关键控制 | 策略/审计已实现，硬件未验证 | 中 | 门锁/电源/燃气的现场验证 | 工具层已强制高风险门；仍需现场演练 |
 
 ## 7. 关键架构决策
@@ -246,6 +259,7 @@ southbound mcp
 - **P1.6 持久化 LAN 图与事件日志（已完成）**：SQLite 合并 inventory/deep scan/commissioning/access binding，事件 id 跨重启并可重放；`/api/graph`、`/api/state`、`southbound graph`、MCP `lan_graph`。
 - **P1.7 Skill runtime（已完成）**：manifest 校验、trigger/guard、shadow/proposed/autonomous、AccessHub 执行、verify/fallback；MCP `iot_skills` / `iot_skill_run`，HTTP 与 CLI 共用同一 runner。
 - **P1.8 Observation / Mission（已完成）**：事件归一化为 observation，situation snapshot；mission proposed/approved/running/verified/failed 状态机、审批、动作回读和 observation 写入。
+- **P1.9 视觉感知 MVP（已完成）**：CameraAdapter（synthetic/file/USB/RTSP）、AccessHub 快照能力、`policy.allow_camera` 隐私门、纯本地运动检测、`vision.*` observation、MCP/HTTP/Dashboard 接入；真实摄像头与目标检测器是下一步。
 - **P1.7 多硬件交互面（已完成）**：端点注册、session、模态路由、跨端 handoff、`/interaction` 面板；文本轮次已跑通，真实音频/边缘 shell 仍待硬件。
 - **P2 第一条真实链路**：ESP32-S3 + ESPHome + 一个 Matter Wi-Fi 插座；HA/MQTT 落在 NAS；先经 HA/MQTT adapter 接入。
 - **P3 Zigbee 与事件流（部分完成）**：SLZB-06 + zigbee2mqtt；MQTT/Z2M、BLE/NFC 和 HA WebSocket 事件已进入统一 EventBus；真实 Zigbee 硬件与 Z2M 现场验证仍未完成。

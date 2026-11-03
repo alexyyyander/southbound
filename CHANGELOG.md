@@ -6,6 +6,33 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.14.0] - 2026-11-03
+
+### Added
+
+- **Camera adapter**: `camera` device kind with `snapshot` / `read`
+  capabilities; sources for dependency-free synthetic frames, local image
+  files, USB cameras (optional OpenCV), and RTSP cameras (ffmpeg). Snapshots
+  are written to local `data/vision/` evidence with SHA-256, retention and
+  per-camera file caps; raw frames never enter the event bus.
+- **Vision perception**: `PerceptionService` samples cameras, detects motion
+  on a 64×36 grayscale frame difference, and emits `vision.motion` /
+  `vision.motion_stopped` transitions with confidence and local evidence
+  references. `ObservationService` projects them as `modality: vision`.
+- **Privacy gate**: `Capability.sensitivity` and `policy.allow_camera` keep
+  camera access separate from action risk; a read-only snapshot can still be
+  denied.
+- **Vision surface**: `GET /api/vision/status`, `/api/vision/cameras`,
+  `POST /api/vision/<device_id>/snapshot`,
+  `GET /api/vision/snapshots/<device_id>/<filename>`, and
+  `GET /api/vision/observations`; MCP `iot_vision_status`,
+  `iot_vision_snapshot`, `iot_vision_observe` (31 tools total); CLI
+  `southbound vision` and `southbound vision --snapshot`.
+- **Dashboard vision panel**: camera cards with latest local snapshot,
+  STILL/MOTION state, evidence hash, capture and remove actions; the demo can
+  commission a synthetic camera in one click.
+- `docs/VISION.md`, camera config examples, and 13 vision tests (168 total).
+
 ## [0.13.0] - 2026-11-02
 
 ### Added

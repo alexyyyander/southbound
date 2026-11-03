@@ -1,6 +1,6 @@
 # Protocol & API
 
-版本：`0.13.0`。这是一份面向实现的协议说明：北向 agent 如何调用 Southbound，南向 adapter 如何执行，事件长什么样。
+版本：`0.14.0`。这是一份面向实现的协议说明：北向 agent 如何调用 Southbound，南向 adapter 如何执行，事件长什么样。
 
 ## 1. 两个平面
 
@@ -44,6 +44,11 @@ Wi-Fi / Zigbee / Matter / ESPHome / MQTT
 | GET | `/api/observations` | 按 mission/device/since 查询结构化 observations |
 | GET | `/api/observations/<id>` | 单条 observation |
 | GET | `/api/situation` | 设备状态 + 最近 observation + uncertainties |
+| GET | `/api/vision/status` | 摄像头、来源、运动状态与感知服务 |
+| GET | `/api/vision/cameras` | `/api/vision/status` 的别名 |
+| POST | `/api/vision/<device_id>/snapshot` | 经 AccessHub 抓取快照，返回本地证据引用 |
+| GET | `/api/vision/snapshots/<device_id>/<filename>` | 本地快照图片 |
+| GET | `/api/vision/observations` | 最近的 `vision.*` observation |
 | GET | `/api/missions` | mission 列表 |
 | GET | `/api/missions/<id>` | 单个 mission |
 | POST | `/api/missions` | 创建 proposed/approved mission |
@@ -219,6 +224,9 @@ data: {"id":12,"ts":"2026-10-26T17:00:00+08:00","type":"command","plane":"southb
 | `direction` | `in` / `down` / `up` / `out` |
 | `device_id` / `name` | 设备标识 |
 | `capability` | 能力名（动作事件） |
+| `confidence` | 感知/observation 置信度 |
+| `evidence` | 本地证据引用（如 `local://vision/...`）与哈希 |
+| `privacy` | 隐私与保留策略 |
 | `ok` / `error` | 结果 |
 | `requires_confirmation` | 策略拒绝时可能出现 |
 
@@ -231,6 +239,7 @@ data: {"id":12,"ts":"2026-10-26T17:00:00+08:00","type":"command","plane":"southb
 | `command` | southbound | Southbound → adapter/设备 |
 | `state` | northbound | 设备状态回读 |
 | `device.state` / `device.notification` / `device.tag` / `device.connection` / `device.error` | northbound | 设备主动上报；HA `state_changed`、MQTT、BLE/NFC 共用此路径 |
+| `vision.motion` / `vision.motion_stopped` | northbound | 摄像头运动开始/结束；带 `data.ratio`、`confidence`、`evidence.snapshot` |
 | `interaction.input` | northbound | 交互端点输入；携带 `ok/error` |
 | `interaction.output` | northbound | 按端点模态渲染的输出意图；携带 `ok/error` |
 | `interaction.session` | northbound | 会话活动端点更新；携带 `ok/error` |
@@ -318,6 +327,7 @@ stdio MCP 工具：
 - 接入层：`iot_hub_status`、`iot_devices_list`、`iot_device_describe`、`iot_tool_catalog`、`iot_call`
 - Skills：`iot_skills`、`iot_skill_describe`、`iot_skill_run`、`iot_skill_status`
 - Observations：`iot_observe`、`iot_observations`
+- Vision：`iot_vision_status`、`iot_vision_snapshot`、`iot_vision_observe`
 - Missions：`iot_missions`、`iot_mission_create`、`iot_mission_status`、`iot_mission_control`
 - 受控接入：`iot_commission`、`iot_decommission`
 
@@ -328,6 +338,7 @@ stdio MCP 工具：
 - `read_only`：只允许 `risk=read`；禁止接入。
 - `supervised`：read/low/medium 自动；high 需要 `allow_high_risk` + confirm；接入需要 confirm。
 - `autonomous`：high 需要 `allow_high_risk` 且 `safe_to_automate`；接入默认仍需 confirm，除非 `allow_auto_commission=true`。
+- `allow_camera`：独立于 risk 的隐私门；关闭后 `sensitivity=camera` 的 capability（快照/读取）一律拒绝。
 
 协议是**加法演进**：新增事件类型、工具和字段不破坏旧客户端；破坏性变更会升级 minor 版本并在 [CHANGELOG](../CHANGELOG.md) 标注。
 

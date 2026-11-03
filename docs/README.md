@@ -2,6 +2,7 @@
 
 - [相关研究与竞品](RELATED_WORK.md) — agentic IoT、Ori、AssetOpsBench、WoT/IBN、MCP 安全
 - [Observations 与 Situation](OBSERVATIONS.md) — 事件归一化、observation store、situation snapshot
+- [视觉感知](VISION.md) — 摄像头来源、快照/运动 observation、本地证据与隐私边界
 - [Missions](MISSIONS.md) — proposed/approved/running/verified 状态机、审批与回读
 - [Edge Skills 与硬件条件](EDGE_SKILLS.md) — skill 合约、T0–T3 硬件、电源/网络/执行器/安全/隐私
 - [架构拆解图](ARCHITECTURE_BREAKDOWN.md) — Agent harness、MCP、Southbound core、adapters、物理设备与部署 profile

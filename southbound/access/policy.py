@@ -17,6 +17,9 @@ class PolicyConfig:
     mode: str = "supervised"  # read_only | supervised | autonomous
     allow_high_risk: bool = False
     allow_auto_commission: bool = False
+    # Camera/microphone access is privacy-sensitive even when the capability
+    # itself is read-only.
+    allow_camera: bool = True
     allowed_rooms: list[str] | None = None
     allowed_kinds: list[str] | None = None
     allowed_adapters: list[str] | None = None
@@ -56,6 +59,12 @@ class PolicyEngine:
         if config.allowed_adapters and binding.adapter not in config.allowed_adapters:
             return Decision(
                 False, risk.value, reason=f"适配器 {binding.adapter} 不在允许范围"
+            )
+        if capability.sensitivity == "camera" and not config.allow_camera:
+            return Decision(
+                False,
+                risk.value,
+                reason="摄像头访问未启用（policy.allow_camera=false）",
             )
 
         if config.mode == "read_only":
@@ -107,6 +116,12 @@ class PolicyEngine:
             return Decision(False, "medium", reason=f"设备类型 {kind} 不在允许范围")
         if config.allowed_adapters and adapter not in config.allowed_adapters:
             return Decision(False, "medium", reason=f"适配器 {adapter} 不在允许范围")
+        if kind == "camera" and not config.allow_camera:
+            return Decision(
+                False,
+                "medium",
+                reason="摄像头访问未启用（policy.allow_camera=false）",
+            )
 
         if config.mode == "read_only":
             return Decision(False, "medium", reason="只读模式不允许接入新设备")
