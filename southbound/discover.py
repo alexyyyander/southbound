@@ -239,7 +239,8 @@ def parse_arp() -> dict[str, str]:
         except OSError:
             pass
     entries: dict[str, str] = {}
-    out = run_cmd(["arp", "-a"], 5).stdout
+    # Avoid reverse DNS lookups delaying the neighbor table past our timeout.
+    out = run_cmd(["arp", "-an"], 5).stdout
     for line in out.splitlines():
         match = _ARP_LINE.search(line)
         if not match:
