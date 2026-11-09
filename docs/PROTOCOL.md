@@ -2,6 +2,8 @@
 
 版本：`0.11.0`。这是一份面向实现的协议说明：北向 agent 如何调用 Southbound，南向 adapter 如何执行，事件长什么样。
 
+反编译分析工具的独立契约见 [反编译 MCP 接口](DECOMPILATION_MCP.md)。可配置真实 REA 后端；未配置时返回 `BACKEND_UNAVAILABLE`，不经过设备接入层。部署见 [REA 后端](REA_BACKEND.md)。
+
 ## 1. 两个平面
 
 ```text
@@ -271,7 +273,7 @@ data: {"id":12,"ts":"2026-10-26T17:00:00+08:00","type":"command","plane":"southb
 
 ## 5. MCP
 
-stdio MCP 工具：
+stdio MCP 共 22 个工具：
 
 - 发现/深扫：`lan_inventory`、`device_details`、`signal_paths`、`integration_plan`、`deep_scan_lan`
 - 模拟器：`sim_devices`、`sim_action`、`sim_goal`
@@ -279,6 +281,20 @@ stdio MCP 工具：
 - 受控接入：`iot_commission`、`iot_decommission`
 
 `iot_call` 的 `arguments` 必须符合 Capability schema；`confirm` 用于高风险动作。`iot_commission` 的 `confirm` 默认 false。
+
+### 反编译工具
+
+另有 7 个工具：`decompile_open_target`、`decompile_target_overview`、
+`decompile_search_functions`、`decompile_search_strings`、`decompile_analyze_function`、
+`decompile_analysis_status`、`decompile_close_target`。
+
+除打开目标外，调用必须携带返回的 `session_id` 和 `target_id`。结果同时提供 JSON 文本和
+`structuredContent`；业务错误使用 `isError: true`，其中 `error.code` 为稳定错误码。
+成功返回 `data`、`evidence`、`completeness`、`limitations`；`ok: true` 不代表覆盖完整。
+详细字段、选择器和分页见 [契约](DECOMPILATION_MCP.md)，请求示例见 [演示](DEMO.md#反编译-mcp-demo)。
+
+这些工具由 MCP 主机的独立分析后端执行；IoT 的 `confirm`、设备策略与共享 Runtime token
+不构成分析授权。没有新增 `/api/decompile/*` 或其他分析 HTTP 端点。
 
 ## 6. 策略与兼容性
 

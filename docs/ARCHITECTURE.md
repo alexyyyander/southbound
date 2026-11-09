@@ -26,7 +26,7 @@
             ┌───────────────────────────┼───────────────────────────┐
             ▼                           ▼                           ▼
       agent.py                  mcp_server.py                viz_server.py
-   inventory 问答 / 方案      stdio MCP（15 tools）        HTTP API + 可视化面板
+   inventory 问答 / 方案      stdio MCP（22 tools）        HTTP API + 可视化面板
             │                           │                           │
             └───────────────┬───────────┘                           ▼
                             ▼                                 southbound/web/
@@ -76,17 +76,33 @@ southbound mcp
 | `sim_agent.py` | 目标拆分 → 设备匹配 → 动作 → 回读，输出可展示的 trace | 可用 |
 | `viz_server.py` | 本地面板 HTTP API，绑定 `127.0.0.1`；模拟器操作与 agent demo 经 AccessHub | 可用 |
 | `runtime.py` | SouthboundRuntime + EventBus：northbound intent/call、受控 onboarding、southbound adapter 管线、SSE 事件流 | 可用 |
-| `mcp_server.py` | stdio MCP，15 个工具：发现、深扫、模拟器、接入层、受控 onboarding | 可用 |
+| `mcp_server.py` | stdio MCP，15 个既有工具 + 7 个独立反编译工具 | 可用 |
+| `analysis/` | 分析契约、可注入后端、REA stdio 通信、目标快照、证据与资源释放 | macOS ARM 真实链路已验证 |
 | `cli.py` | 统一 CLI，含 `tools` / `call` / `onboard` / `decommission` / `access` | 可用 |
 | `access/` | 设备/能力模型、参数校验、策略、审计、AccessHub、受控接入、六类 adapter | 可用 |
 | `access/commissioning.py` | 已授权设备的非敏感持久化记录与启动恢复 | 可用 |
 | `config/access.example.json` | HA / MQTT / Zigbee2MQTT 配置示例 | 可用 |
 | `southbound/web/` | 观测站风格可视化面板 | 可用 |
-| `tests/` | 标准库 unittest，覆盖分级、模拟闭环、接入层策略与审计、运行时/事件总线、远程 runtime client/token、受控接入、2.5D 场景、survey | 89 项通过 |
+| `tests/` | 标准库 unittest，覆盖分级、模拟闭环、接入层策略与审计、运行时/事件总线、远程 runtime client/token、受控接入、2.5D 场景、survey | 2026-11-06 本机 114 项通过，含可选真实分析验收 |
+
+### 独立反编译分支
+
+```text
+MCP 客户端 → mcp_server.py
+              ├─ 既有 IoT 工具 → Runtime → AccessHub → 设备适配器
+              └─ decompile_* → AnalysisTools → AnalysisBackend
+                                               └─ ReaBackend → REA MCP → Ghidra
+```
+
+分析分支与设备分支并列；它有独立的目标/会话、路径配置和证据记录，不是 DeviceAdapter。
+REA 每个目标一个进程，处理同一目标时使用不可变快照。正常关闭释放进程与快照并保留证据。
+`SOUTHBOUND_REMOTE_URL` 仅选择 IoT Runtime，分析仍在 MCP 主机执行。
+当前两个分支共享同步 MCP 请求循环，耗时分析会阻塞设备请求；并发、队列与取消尚未实现。
+部署及资源预算见 [REA 后端](REA_BACKEND.md)，输入输出见 [契约](DECOMPILATION_MCP.md)。
 
 ### 接入工具层
 
-`AccessHub` 是 agent 的唯一执行入口：`iot_call(device_id, capability, arguments, confirm)`。
+`AccessHub` 是 agent 的设备能力执行入口：`iot_call(device_id, capability, arguments, confirm)`。
 
 - **DeviceBinding**：设备在工具层中的投影，含 kind、room、tier、adapter、address。
 - **Capability**：最小可调用动作，带 JSON Schema、风险等级和返回值。
@@ -208,7 +224,7 @@ southbound mcp
 | LLM planner | 确定性 sim_agent + 工具目录 | 中高 | 工具调用可靠性、延迟、幻觉 | 3B 以上可用；必须保留策略与审计 |
 | “所有硬件”完整自主 | 不支持 | 低（字面） | 凭据、覆盖率、安全 | 预接入集合内可达 L3；全网无授权接管不可行 |
 | 可视化 | 已实现 | 高 | 数据新鲜度 | 适合观测与演示 |
-| MCP 外部 agent | 已实现（15 tools） | 高 | 客户端批准、权限 | 工具边界清晰，可逐步扩展 |
+| MCP 外部 agent | 已实现（22 tools；分析后端按需配置） | 高 | 客户端批准、权限 | 工具边界清晰，可逐步扩展 |
 | 安全关键控制 | 策略/审计已实现，硬件未验证 | 中 | 门锁/电源/燃气的现场验证 | 工具层已强制高风险门；仍需现场演练 |
 
 ## 7. 关键架构决策

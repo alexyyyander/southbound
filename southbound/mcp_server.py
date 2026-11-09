@@ -24,6 +24,7 @@ Tools:
     iot_call         policy-checked, audited device action
     iot_commission   controlled onboarding with explicit confirmation
     iot_decommission remove a commissioned device
+    decompile_*      seven static-analysis tools; unavailable until a backend is injected
 """
 
 from __future__ import annotations
@@ -34,6 +35,10 @@ import json
 import os
 import sys
 
+from .analysis.backend import AnalysisBackend
+from .analysis.contracts import TOOLS as ANALYSIS_TOOL_DEFINITIONS, OPERATIONS
+from .analysis.mcp import AnalysisTools
+
 from . import agent
 from . import deep_scan as deep
 from .access.capabilities import CAPABILITIES
@@ -43,7 +48,7 @@ from .access.errors import AccessError
 from .client import RemoteRuntime
 from .deep_scan import DEFAULT_OUT as DEEP_OUT
 from .discover import DEFAULT_OUT, discover, print_inventory
-from .paths import DATA_DIR
+from .paths import DATA_DIR, PROJECT_ROOT
 from .runtime import SouthboundRuntime
 
 REMOTE_ENV = "SOUTHBOUND_REMOTE_URL"
@@ -80,6 +85,22 @@ def configure(remote: str | None = None, token: str | None = None) -> None:
 RUNTIME: SouthboundRuntime | RemoteRuntime = _make_runtime()
 SIM = getattr(RUNTIME, "simulator", None)
 HUB = getattr(RUNTIME, "hub", None)
+
+ANALYSIS = AnalysisTools()
+
+
+def configure_analysis_backend(backend: AnalysisBackend | None = None) -> None:
+    """Inject an owned backend; None restores the unavailable default.
+
+    Configure before serving requests. If old cleanup fails, replacement is not
+    committed; the integrator retains ownership of the proposed new backend.
+    """
+    global ANALYSIS
+    if backend is ANALYSIS.backend:
+        return
+    ANALYSIS.shutdown()
+    ANALYSIS = AnalysisTools(backend)
+
 
 SERVER_NAME = "southbound"
 SERVER_VERSION = "0.11.0"
@@ -341,6 +362,8 @@ TOOLS = [
     },
 ]
 
+TOOLS.extend(ANALYSIS_TOOL_DEFINITIONS)
+
 
 def _text_result(text: str, is_error: bool = False) -> dict:
     return {
@@ -555,6 +578,15 @@ HANDLERS = {
 }
 
 
+def _analysis_handler(operation: str):
+    return lambda arguments: ANALYSIS.call(operation, arguments)
+
+
+HANDLERS.update({
+    "decompile_" + operation: _analysis_handler(operation) for operation in OPERATIONS
+})
+
+
 def handle(request: dict) -> dict | None:
     method = request.get("method", "")
     req_id = request.get("id")
@@ -589,7 +621,11 @@ def handle(request: dict) -> dict | None:
                 "error": {"code": -32602, "message": f"Unknown tool: {name}"},
             }
         try:
-            result = handler(params.get("arguments") or {})
+            arguments = params.get("arguments", {})
+            if name.startswith("decompile_"):
+                result = handler(arguments)
+            else:
+                result = handler(arguments or {})
         except Exception as exc:  # surface failures to the client
             result = _text_result(f"{type(exc).__name__}: {exc}", is_error=True)
         return {"jsonrpc": "2.0", "id": req_id, "result": result}
@@ -604,6 +640,19 @@ def handle(request: dict) -> dict | None:
 
 
 def main() -> None:
+    config_path = os.environ.get("SOUTHBOUND_ANALYSIS_CONFIG")
+    if config_path is None:
+        local_config = PROJECT_ROOT / "config" / "analysis.local.json"
+        config_path = str(local_config) if local_config.is_file() else None
+    if config_path:
+        from .analysis.backend import UnavailableBackend
+        if isinstance(ANALYSIS.backend, UnavailableBackend):
+            from .analysis.rea_backend import ReaBackend
+            try:
+                configure_analysis_backend(ReaBackend.from_file(config_path))
+            except (ValueError, TypeError, KeyError, OSError):
+                # Invalid operator configuration must never enable a simulation fallback.
+                sys.stderr.write("Southbound: invalid analysis backend configuration; backend unavailable.\n")
     try:
         for line in sys.stdin:
             line = line.strip()
@@ -618,7 +667,10 @@ def main() -> None:
                 sys.stdout.write(json.dumps(response, ensure_ascii=False) + "\n")
                 sys.stdout.flush()
     finally:
-        RUNTIME.close()
+        try:
+            ANALYSIS.shutdown()
+        finally:
+            RUNTIME.close()
 
 
 if __name__ == "__main__":

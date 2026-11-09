@@ -1,0 +1,12 @@
+{
+  "command": ["/absolute/path/to/node", "/absolute/path/to/rea-agents/scripts/rea.mjs", "mcp"],
+  "allowed_roots": ["/absolute/path/to/analysis-inputs"],
+  "state_dir": "/absolute/path/to/analysis-state",
+  "provider_id": "ghidra",
+  "timeout": 180,
+  "env": {
+    "GHIDRA_INSTALL_DIR": "/absolute/path/to/ghidra",
+    "JAVA_HOME": "/absolute/path/to/jdk/Contents/Home",
+    "REA_GHIDRA_DECOMPILE_TIMEOUT_SECONDS": "60"
+  }
+}

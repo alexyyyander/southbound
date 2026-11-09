@@ -44,7 +44,8 @@ python -m pip install -e ".[mqtt]"
 
 - `southbound/` — Python package and web assets.
 - `southbound/access/` — device/capability model, policy, audit, adapters.
-- `config/` — example access-layer configuration.
+- `southbound/analysis/` — analysis contracts, backend port, and REA MCP adapter; independent of devices.
+- `config/` — example access-layer and analysis-backend configuration.
 - `docs/` — architecture, access layer, comparison, chips, signals, hardware.
 - `tests/` — standard-library unittest suite.
 - `data/` — generated inventories, scans, and audit logs (gitignored).
@@ -67,6 +68,31 @@ python -m pip install -e ".[mqtt]"
   adapters.
 - Do not make tests depend on a live LAN, MQTT broker, or Home Assistant
   instance.
+
+## Analysis backend changes
+
+Implement `AnalysisBackend` independently of `DeviceAdapter`/`AccessHub`. Keep MCP
+inputs, outputs, errors and provenance aligned with `analysis/contracts.py`.
+Use test doubles only in tests; an unconfigured backend must remain unavailable.
+
+Run interface and subprocess tests without installing an engine:
+
+```bash
+python -m unittest discover -s tests -p 'test_analysis_mcp.py' -v
+python -m unittest discover -s tests -p 'test_rea_backend.py' -v
+```
+
+Real-engine validation is explicit and requires a configured backend and `cc`:
+
+```bash
+SOUTHBOUND_REA_LIVE_CONFIG=/absolute/path/analysis.local.json \
+python -m unittest discover -s tests -p 'test_rea_live.py' -v
+```
+
+Do not commit local configs, input binaries, evidence or runtime dependencies.
+Update the [contract](docs/DECOMPILATION_MCP.md), [deployment guide](docs/REA_BACKEND.md),
+and changelog when the analysis surface changes. On external disks, exclude macOS
+AppleDouble metadata from linting: `ruff check --extend-exclude '._*' .`.
 
 ## Code style
 

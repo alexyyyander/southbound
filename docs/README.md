@@ -1,5 +1,11 @@
 # 文档索引
 
+- [反编译功能更新说明](DECOMPILATION_UPDATE.md) — 本次变化、使用入口、历史验收与当前限制
+
+- [REA 真实分析后端](REA_BACKEND.md) — 本地配置、工具映射、证据保存及真实验证
+
+- [反编译 MCP 接口](DECOMPILATION_MCP.md) — 工具契约、分析后端抽象及集成责任边界
+
 - [架构拆解图](ARCHITECTURE_BREAKDOWN.md) — Agent harness、MCP、Southbound core、adapters、物理设备与部署 profile
 - [共享 Runtime Service](RUNTIME_SERVICE.md) — 一个设备图供 Dashboard / MCP / CLI 共用，远程调用与安全边界
 - [BLE / NFC 与设备事件](HARDWARE_ADAPTERS.md) — 统一适配器注册、真实驱动、模拟演示与验证边界

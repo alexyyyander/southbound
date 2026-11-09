@@ -11,3 +11,11 @@ config/access.local.json
 *.egg-info/
 build/
 dist/
+
+# Local REA runtime configuration, input binaries and retained evidence
+config/analysis.local.json
+data/analysis/
+data/analysis-inputs/
+
+# macOS AppleDouble companions on external disks
+._*

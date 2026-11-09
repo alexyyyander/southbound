@@ -141,6 +141,58 @@ claude mcp add --scope project southbound -- python3 -m southbound.mcp_server
 - `iot_commission`（`adapter=sim`，`kind=sensor`，`confirm=true`）
 - `iot_decommission`
 
+### 反编译 MCP Demo
+
+先按 [后端部署](REA_BACKEND.md) 配置真实引擎，再重启 MCP；只启动 Dashboard 不会提供反编译入口。
+将自有或获授权的本地二进制放入允许目录。以下 JSON 是 `tools/call` 的 `params`，
+不是直接发送到 shell 的命令；路径和标识均需替换为你的实际值。
+
+打开目标：
+
+```json
+{"name":"decompile_open_target","arguments":{"path":"/Volumes/ORICO/southbound/data/analysis-inputs/example"}}
+```
+
+从成功响应的 `structuredContent` 读取 `session_id` 和 `target_id`。以下 `SESSION_ID`、
+`TARGET_ID` 是占位符，不可作为真实标识使用。
+
+查询概况、搜索函数和字符串：
+
+```json
+{"name":"decompile_target_overview","arguments":{"session_id":"SESSION_ID","target_id":"TARGET_ID"}}
+```
+
+```json
+{"name":"decompile_search_functions","arguments":{"session_id":"SESSION_ID","target_id":"TARGET_ID","query":"main","limit":20}}
+```
+
+```json
+{"name":"decompile_search_strings","arguments":{"session_id":"SESSION_ID","target_id":"TARGET_ID","query":"http","limit":20}}
+```
+
+如果返回 `data.next_cursor`，下一页传入该 `cursor` 并保持原查询。使用搜索返回的实际地址
+分析函数；`0x401000` 仅示例，不保证存在于你的目标中：
+
+```json
+{"name":"decompile_analyze_function","arguments":{"session_id":"SESSION_ID","target_id":"TARGET_ID","selector":{"address":"0x401000"}}}
+```
+
+也可用 `selector: {"name":"实际精确函数名"}`，两种选择条件只能传一个。
+读取 `data.pseudocode` / `data.assembly` 时，同时查看 `evidence`、`completeness` 和 `limitations`。
+
+查询状态并关闭目标：
+
+```json
+{"name":"decompile_analysis_status","arguments":{"session_id":"SESSION_ID","target_id":"TARGET_ID"}}
+```
+
+```json
+{"name":"decompile_close_target","arguments":{"session_id":"SESSION_ID","target_id":"TARGET_ID"}}
+```
+
+关闭后证据仍保留在配置的 `state_dir/evidence/`，原始目标文件不会被删除。
+需要验证整条真实链路时，运行 [显式引擎测试](REA_BACKEND.md#验证)，不要用模拟测试代替。
+
 ## 6. 常见问题
 
 **面板打不开？** 确认 `8765` 端口没有被占用；服务只绑定 `127.0.0.1`。
@@ -152,6 +204,12 @@ claude mcp add --scope project southbound -- python3 -m southbound.mcp_server
 **接入后 CLI 看不到设备？** CLI 和已运行的 dashboard 默认是两个进程。启动 `southbound serve` 作为共享 runtime，并用 `SOUTHBOUND_REMOTE_URL` 连接 CLI/MCP，才能共享同一个设备图；否则 CLI 会写 `data/commissioned.json`，dashboard 刷新/重启后恢复。
 
 **接入失败？** 检查 adapter 是否可用、是否传了 `confirm=true`、HA 是否设置了 `HA_TOKEN`、MQTT 是否安装了 `paho-mqtt`。
+
+**反编译返回 BACKEND_UNAVAILABLE？** 检查 MCP 主机的分析配置是否加载，以及 REA/Node/Ghidra/JDK
+是否匹配。IoT 的 `--remote` 不会替你配置远程分析引擎。错误码和部署排错见
+[契约](DECOMPILATION_MCP.md) 与 [后端部署](REA_BACKEND.md)。
+
+**分析时设备调用等待？** 当前 MCP 请求循环是同步的，这是已知限制；尚未提供并发调度。
 
 ## 相关文档
 

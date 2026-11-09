@@ -67,7 +67,13 @@ An MCP client configuration can use either. Example:
 }
 ```
 
-When remote mode is active, MCP tools use the HTTP runtime surface:
+When remote mode is active, the existing IoT MCP tools use the HTTP runtime surface.
+The seven `decompile_*` tools remain local to the MCP host and use a separately
+configured analysis backend. `SOUTHBOUND_REMOTE_URL` and the runtime bearer token
+do not forward or authorize analysis. No analysis HTTP endpoints were added.
+See [REA backend deployment](REA_BACKEND.md).
+
+The IoT HTTP surface is:
 
 - `GET /api/northbound/status`
 - `GET /api/northbound/devices`

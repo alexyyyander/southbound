@@ -34,7 +34,7 @@ Do not include credentials, tokens, or personal network captures.
 
 Southbound is a local-first tool, not a hardened remote control service.
 
-- The dashboard and MCP server bind to `127.0.0.1` by default.
+- The dashboard HTTP service binds to `127.0.0.1` by default; MCP uses stdio and does not listen on TCP.
 - Discovery and scanning are intended for networks you own or are authorized
   to operate.
 - Device access goes through `AccessHub`, which applies policy and audit.
@@ -48,6 +48,20 @@ Southbound is a local-first tool, not a hardened remote control service.
   committed files.
 - `data/` contains local inventories and audit logs; it is gitignored but may
   still contain sensitive network metadata. Protect it accordingly.
+
+## Static analysis backend
+
+Analysis uses a separately configured backend, not device capabilities or
+`AccessHub` permissions. The trusted operator config chooses the REA command and
+allowed input directories. The remote IoT runtime token does not authorize or
+proxy analysis calls. REA/Ghidra run with the current user's OS permissions;
+path restrictions do not provide a multi-user process sandbox.
+
+The tools inspect an input snapshot without executing the target. Retained
+records may contain binary content, pseudocode, local paths or engine diagnostics.
+Protect `data/analysis/`, keep local configuration and evidence out of public
+reports, and apply a retention policy. Forced termination may leave workspaces
+or engine processes requiring inspection. See [deployment boundaries](docs/REA_BACKEND.md).
 
 ## Out of scope
 

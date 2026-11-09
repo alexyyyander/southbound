@@ -6,6 +6,38 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- Seven `decompile_*` MCP tools for target open/overview, function and string
+  search, function analysis, analysis status, and target close (22 tools total).
+- Independent `AnalysisBackend` port and validated input/output/error contracts,
+  including opaque session/target identities, provenance, and incomplete results.
+- Real REA stdio backend with per-target processes, immutable input snapshots,
+  allowed input roots, search pagination, retained evidence, bounded requests,
+  and idempotent resource release. No production simulation fallback.
+- Operator configuration via `config/analysis.local.json` or
+  `SOUTHBOUND_ANALYSIS_CONFIG`, plus a portable configuration example.
+- Interface and controlled-subprocess tests, and an opt-in real MCP/REA/Ghidra
+  smoke test. Local acceptance on 2026-11-06 passed all 114 tests, including the
+  real engine; ordinary CI skips that opt-in test.
+- [Decompilation update notes](docs/DECOMPILATION_UPDATE.md), API contract,
+  backend deployment guide, and MCP usage examples.
+
+### Changed
+
+- MCP startup can load the optional local analysis backend; EOF releases its
+  resources as well as the existing IoT runtime.
+- README, architecture, protocol, runtime and contributor documentation now
+  distinguish local analysis from remote IoT operations.
+
+### Known limitations
+
+- Analysis remains synchronous and can block IoT calls in the same MCP process;
+  scheduling, in-flight cancellation, and analysis HTTP/UI endpoints are absent.
+- The REA client currently supports POSIX, with real acceptance on macOS ARM.
+  The verified published REA 6.8.0 setup uses Ghidra 12.1.4 and a locally built
+  ARM64 decompiler. Other deployments require their own engine validation.
+
 ## [0.11.0] - 2026-10-27
 
 ### Added

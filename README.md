@@ -64,7 +64,7 @@
 | **2.5D 房间实验** | `GET /scene`：可移动 avatar、presence 信号、点击设备、自动反射与回读验证 |
 | **Splat 预览** | `/scene` 内切换 WebGL 合成 splat：轨道旋转、设备热点、avatar 投影；同一控制层 |
 | **可视化** | 网络拓扑、设备清单、模拟端点、Agent 控制台、接入表单 |
-| **MCP** | 15 个工具：发现、深扫、模拟器、接入层、受控 onboarding |
+| **MCP** | 15 个设备工具 + 7 个反编译接口工具；可配置真实 REA 后端，未配置时不可用，见 [接口说明](docs/DECOMPILATION_MCP.md) 与 [后端部署](docs/REA_BACKEND.md) |
 | **无硬件闭环** | 六个虚拟端点 + 确定性 agent trace，没有设备也能跑 |
 
 BLE / NFC 的配置、事件入口与无硬件演示见 [硬件适配器说明](docs/HARDWARE_ADAPTERS.md)。
@@ -298,6 +298,7 @@ claude mcp add --scope project southbound -- python3 /path/to/southbound/mcp_ser
 | 模拟器 | `sim_devices`、`sim_action`、`sim_goal` |
 | 接入层 | `iot_hub_status`、`iot_devices_list`、`iot_device_describe`、`iot_tool_catalog`、`iot_call` |
 | 受控 onboarding | `iot_commission`、`iot_decommission` |
+| 反编译分析 | `decompile_open_target`、`decompile_target_overview`、`decompile_search_functions`、`decompile_search_strings`、`decompile_analyze_function`、`decompile_analysis_status`、`decompile_close_target` |
 
 首次使用需要在 Claude Code 中批准该 server。
 
@@ -314,6 +315,28 @@ SOUTHBOUND_REMOTE_URL=http://127.0.0.1:8765 python3 -m southbound.mcp_server
 ```
 
 共享模式的 API、配置和安全边界见 [docs/RUNTIME_SERVICE.md](docs/RUNTIME_SERVICE.md)。
+
+### 反编译分析 MCP
+
+Southbound 已提供 7 个静态分析工具，通过独立的 REA 后端调用 Ghidra。支持打开本地目标、
+读取概况、搜索函数/字符串、按名称或地址分析函数、查询状态和关闭目标。
+
+- **本机使用**：ORICO 部署已配置 `config/analysis.local.json`。将文件放入
+  `data/analysis-inputs/`，重启原有 Southbound MCP，即可让 AI 调用 `decompile_*` 工具。
+- **其他机器部署**：参考 `config/analysis.example.json`，准备兼容的 REA、Node、Ghidra
+  和 JDK，再填写本地配置。仅安装 Southbound 的 Python 包不会自动安装这些依赖。
+- **调用顺序**：打开目标 → 保存返回的 `session_id` / `target_id` → 搜索、分析 → 关闭目标。
+  未配置后端时明确返回 `BACKEND_UNAVAILABLE`，不会产生模拟分析结果。
+- **结果**：返回伪代码/汇编、证据来源、`completeness` 和 `limitations`；结果不完整时仍会
+  保留已取得的内容。证据保存在 `data/analysis/evidence/`，关闭后保留。
+- **运行边界**：静态分析不执行目标；当前 MCP 同步处理，耗时分析会阻塞同进程设备请求。
+  没有任务调度、调用中取消、分析 HTTP API 或 Dashboard 入口。
+
+REA 在 MCP 所在主机启动；`--remote` / `SOUTHBOUND_REMOTE_URL` 仅转发 IoT Runtime。
+本机已验证 REA 6.8.0 + Ghidra 12.1.4；macOS ARM 使用本机构建的原生反编译器。
+
+详见 [功能更新说明](docs/DECOMPILATION_UPDATE.md)、[调用示例](docs/DEMO.md#反编译-mcp-demo)、
+[接口契约](docs/DECOMPILATION_MCP.md) 和 [部署与排错](docs/REA_BACKEND.md)。
 
 ### HTTP
 
@@ -363,6 +386,7 @@ southbound/
 │   ├── sim_agent.py         # 确定性 agent 循环
 │   ├── viz_server.py        # 面板 / northbound HTTP API / SSE
 │   ├── mcp_server.py        # stdio MCP
+│   ├── analysis/            # 反编译契约、后端抽象、REA MCP 适配与进程通信
 │   ├── access/
 │   │   ├── models.py        # DeviceBinding / Capability / Risk
 │   │   ├── capabilities.py  # 能力定义、校验、目录
@@ -379,9 +403,10 @@ southbound/
 │   └── web/                 # 观测站面板 + scene.html / scene.js / splat.js
 ├── assets/                  # Logo、社交预览与品牌说明
 ├── config/access.example.json
+├── config/analysis.example.json # 分析后端部署示例（本地配置不提交）
 ├── deploy/systemd/          # Pi 常驻 harness 示例
 ├── docs/                    # About、架构、协议、演示、harness、接入层、onboarding、芯片、信号、硬件、扫描
-├── tests/                   # 89 项 unittest
+├── tests/                   # unittest；真实反编译验收需显式启用
 ├── data/                    # 本地生成，gitignored
 ├── viz_server.py            # 面板兼容入口
 ├── mcp_server.py            # MCP 兼容入口
@@ -408,12 +433,27 @@ make lint     # ruff check .
 make build    # wheel + sdist
 ```
 
-当前 89 项标准库测试覆盖分级规则、模拟器、agent 目标拆分、能力校验、策略、审计、工具目录、运行时/事件总线、远程 runtime client/token、受控接入与持久化、2.5D 场景 presence/自动验证、survey 解析/readiness、HA 适配器映射、MQTT payload 和 CLI 解析，以及适配器注册、BLE/NFC 模拟读写、设备事件、驱动边界和资源释放。
+标准库测试覆盖分级规则、模拟器、agent 目标拆分、能力校验、策略、审计、工具目录、运行时/事件总线、远程 runtime client/token、受控接入与持久化、2.5D 场景 presence/自动验证、survey 解析/readiness、HA 适配器映射、MQTT payload 和 CLI 解析，以及适配器注册、BLE/NFC 模拟读写、设备事件、驱动边界和资源释放。
 
-CI 在 Python 3.10–3.13 上跑 ruff、单元测试和 wheel/sdist 构建。
+分析相关测试分为接口契约、受控 MCP 子进程和真实引擎三层。默认 `make test` 跳过真实引擎测试；
+显式设置 `SOUTHBOUND_REA_LIVE_CONFIG` 才会编译测试样本并启动 REA/Ghidra：
+
+```bash
+SOUTHBOUND_REA_LIVE_CONFIG=/absolute/path/analysis.local.json \
+python3 -m unittest discover -s tests -v
+```
+
+2026-11-06 的本机验收记录为 114 项全部通过（含真实反编译），见
+`data/analysis/validation.log`；调用及证据引用见 `data/analysis/live-smoke.json`。
+这些是本地生成的记录，不随仓库分发。文档更新不代表在所有平台重新完成引擎验收。
+
+CI 在 Python 3.10–3.13 上跑 ruff、单元测试和 wheel/sdist 构建，默认不启动真实引擎。
 
 ## 文档
 
+- [反编译功能更新](docs/DECOMPILATION_UPDATE.md) — 变化、使用方式、验收与边界
+- [反编译 MCP 契约](docs/DECOMPILATION_MCP.md) — 参数、结果、错误与后端接口
+- [REA 后端部署](docs/REA_BACKEND.md) — 配置、版本兼容、证据和排错
 - [文档索引](docs/README.md)
 - [About Southbound](docs/ABOUT.md) — 项目定位、命名与边界
 - [演示](docs/DEMO.md) — 面板、2.5D 房间、CLI、MCP 与故障排查
@@ -447,11 +487,13 @@ CI 在 Python 3.10–3.13 上跑 ruff、单元测试和 wheel/sdist 构建。
 - 2.5D 房间实验：presence 信号、低风险自动反射、Agent notice、回读验证；
 - WebGL 合成 splat 预览：轨道相机、设备热点、avatar 投影；
 - 无主机 `survey`：Wi-Fi/BLE/radio 证据、服务指纹、Pi/Linux 支持、readiness 报告；
-- 15 个 MCP 工具；
-- 89 项测试、CI、wheel/sdist。
+- 22 个 MCP 工具：15 个既有工具 + 7 个反编译工具；
+- 独立 REA 后端、目标快照、证据保存和资源释放；
+- 接口/子进程测试、可选真实反编译验收、CI、wheel/sdist。
 
 **下一步**
 
+- 分析请求与 IoT 请求并发、任务调度和标准 MCP 取消（当前同步阻塞）；
 - 远程 runtime 的 TLS 与多用户身份（token 已实现；仍建议 loopback 或可信 LAN）；
 - 隔离区/审批 UI，从扫描结果一键预填 onboarding；
 - Home Assistant WebSocket/事件订阅（MQTT/Zigbee2MQTT/BLE/NFC 设备事件已接入；HA REST 仍主要轮询）；
@@ -463,7 +505,8 @@ CI 在 Python 3.10–3.13 上跑 ruff、单元测试和 wheel/sdist 构建。
 
 - 只用于自己拥有或获授权的网络；扫描、嗅探、接入他人设备可能违法。
 - 不做漏洞利用、认证绕过或自传播；onboarding 必须由所有者确认。
-- 面板与 MCP 默认只绑定 `127.0.0.1`，不要把控制接口暴露到公网。
+- 面板 HTTP 服务默认绑定 `127.0.0.1`；MCP 使用 stdio，不监听 TCP 端口。不要把控制接口暴露到公网。
+- 分析路径范围由独立后端配置限制；反编译证据可能包含程序内容或本地路径，不应随公开仓库提交。
 - 真实门锁、电源、燃气等执行器必须走策略 + 确认；LLM 不能直接绕过 `AccessHub`。
 - 接入记录不含 token/password；密钥只从环境变量读取。
 - 物理设备的安全、电气与法规责任由使用者承担。
