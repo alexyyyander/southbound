@@ -4,6 +4,22 @@ from southbound.cli import build_parser
 
 
 class CliParserTest(unittest.TestCase):
+    def test_terminal_connect_command(self) -> None:
+        args = build_parser().parse_args([
+            "terminal-connect", "alex_phone", "--url", "http://192.168.1.2:8765", "--qr", "/tmp/phone.png", "--confirm",
+        ])
+        self.assertTrue(args.connect)
+        self.assertEqual(args.qr, "/tmp/phone.png")
+        self.assertIn("speak", args.capabilities)
+
+    def test_terminal_pair_command(self) -> None:
+        args = build_parser().parse_args([
+            "terminal-pair", "alex_phone", "--capabilities", "notify", "read_battery", "--confirm",
+        ])
+        self.assertEqual(args.device_id, "alex_phone")
+        self.assertEqual(args.capabilities, ["notify", "read_battery"])
+        self.assertTrue(args.confirm)
+
     def test_tools_command(self) -> None:
         args = build_parser().parse_args(["tools"])
         self.assertEqual(args.command, "tools")

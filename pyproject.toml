@@ -41,6 +41,7 @@ classifiers = [
 dependencies = []
 
 [project.optional-dependencies]
+android = ["segno>=1.6,<2"]
 mqtt = ["paho-mqtt>=2.0"]
 ha = ["websocket-client>=1.8"]
 survey = ["bleak>=0.22"]

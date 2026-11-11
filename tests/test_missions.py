@@ -21,11 +21,24 @@ class MissionTest(unittest.TestCase):
             self.runtime,
             ObservationStore(Path(self.tmp.name) / "observations.sqlite3"),
         )
+        self.clock = 1000.0
         self.missions = MissionService(
             self.runtime,
             self.observations,
             MissionStore(Path(self.tmp.name) / "missions.sqlite3"),
         )
+
+        self.missions.worker.clock = lambda: self.clock
+
+    def execute(self, mission_id):
+        self.missions.run(mission_id)
+        for _ in range(20):
+            self.missions.worker.tick()
+            result = self.missions.get(mission_id)
+            if result["status"] != "running":
+                return result
+            self.clock += 1
+        self.fail("mission did not finish")
 
     def tearDown(self) -> None:
         self.missions.close()
@@ -46,7 +59,7 @@ class MissionTest(unittest.TestCase):
             self.missions.approve(mission["mission_id"], confirm=False)
         approved = self.missions.approve(mission["mission_id"], confirm=True)
         self.assertEqual(approved["status"], "approved")
-        verified = self.missions.run(mission["mission_id"])
+        verified = self.execute(mission["mission_id"])
         self.assertEqual(verified["status"], "verified")
         self.assertTrue(verified["result"]["verification"][0]["ok"])
         self.assertGreaterEqual(len(self.observations.observations()), 4)
@@ -62,8 +75,8 @@ class MissionTest(unittest.TestCase):
             requires_approval=False,
         )
         self.assertEqual(mission["status"], "approved")
-        result = self.missions.run(mission["mission_id"])
-        self.assertEqual(result["status"], "verified")
+        result = self.execute(mission["mission_id"])
+        self.assertEqual(result["status"], "completed")
 
     def test_failed_action_marks_mission_failed(self) -> None:
         mission = self.missions.create(
@@ -71,7 +84,7 @@ class MissionTest(unittest.TestCase):
             [{"device_id": "living_light", "capability": "not_a_capability"}],
             requires_approval=False,
         )
-        result = self.missions.run(mission["mission_id"])
+        result = self.execute(mission["mission_id"])
         self.assertEqual(result["status"], "failed")
         self.assertIn("not_a_capability", result["error"])
 
@@ -105,7 +118,7 @@ class MissionTest(unittest.TestCase):
             verify={"device_id": "living_light", "field": "on", "equals": True},
             requires_approval=False,
         )
-        result = self.missions.run(mission["mission_id"])
+        result = self.execute(mission["mission_id"])
         self.assertEqual(result["status"], "failed")
         self.assertEqual(result["result"]["verification"][0]["ok"], False)
 

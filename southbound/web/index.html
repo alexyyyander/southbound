@@ -60,11 +60,11 @@
       <section class="panel agent" aria-labelledby="agent-title">
         <div class="panel__head">
           <h2 id="agent-title">发起一次调用</h2>
-          <p>用模拟设备验证 intent → command → state。</p>
+          <p>控制已连接的手机，或用模拟设备验证指令。</p>
         </div>
         <form id="agent-form" class="agent__form">
           <label class="visually-hidden" for="agent-input">目标</label>
-          <textarea id="agent-input" rows="2" placeholder="例如：打开客厅灯并关掉书房插座" aria-describedby="composer-hint"></textarea>
+          <textarea id="agent-input" rows="2" placeholder="例如：通知我的手机：该喝水了；或 查看手机硬件信息" aria-describedby="composer-hint"></textarea>
           <button id="agent-run" type="button">执行</button>
         </form>
         <p id="composer-hint" class="composer-hint">Enter 执行 · Shift + Enter 换行 · 中文选词不会触发调用</p>

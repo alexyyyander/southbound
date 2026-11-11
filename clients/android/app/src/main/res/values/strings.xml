@@ -1,0 +1,4 @@
+<resources>
+    <string name="test_failed">测试未完成：%1$s\n请检查网络、通知权限和系统语音引擎。</string>
+    <string name="ui_accessibility_description">执行你授权的电脑 Agent 下发的读屏、点击、输入、滑动和返回命令。仅在开启接收及允许界面操作时工作，默认只允许系统设置。手机端不运行 AI 模型，不规划任务；锁屏时不执行界面操作。可在 Southbound 关闭界面操作或停止接收。</string>
+</resources>

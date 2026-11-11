@@ -8,6 +8,27 @@ permissions:
   contents: read
 
 jobs:
+  android:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Install Android SDK components
+        run: sdkmanager 'platforms;android-35' 'build-tools;35.0.0'
+      - name: Test UI observation reference guards
+        working-directory: clients/android
+        run: |
+          mkdir -p /tmp/southbound-ui-tests
+          javac -d /tmp/southbound-ui-tests app/src/main/java/io/southbound/endpoint/UiObservation.java app/src/main/java/io/southbound/endpoint/SettingsNavigation.java tests/io/southbound/endpoint/*.java
+          java -cp /tmp/southbound-ui-tests io.southbound.endpoint.UiObservationTest
+          java -cp /tmp/southbound-ui-tests io.southbound.endpoint.SettingsNavigationTest
+      - name: Build and lint Android reference client
+        working-directory: clients/android
+        run: ./gradlew --no-daemon assembleDebug lintDebug
+
   test:
     runs-on: ubuntu-latest
     strategy:

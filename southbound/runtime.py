@@ -269,7 +269,10 @@ class SouthboundRuntime:
             }
         )
         try:
-            result = run_goal(goal, self._agent_runtime, context=context)
+            from .phone_intent import phone_intent
+            result = phone_intent(self, goal, context)
+            if result is None:
+                result = run_goal(goal, self._agent_runtime, context=context)
         except Exception as exc:  # keep the runtime alive on planner bugs
             result = {
                 "goal": goal,
@@ -300,6 +303,7 @@ class SouthboundRuntime:
         arguments: dict[str, Any] | None = None,
         confirm: bool = False,
         source: str = "northbound",
+        idempotency_key: str = "",
     ) -> dict:
         arguments = arguments or {}
         name = device_id
@@ -309,7 +313,8 @@ class SouthboundRuntime:
             pass
 
         try:
-            result = self.hub.call(device_id, capability, arguments, confirm=confirm)
+            result = self.hub.call(device_id, capability, arguments, confirm=confirm,
+                                   idempotency_key=idempotency_key)
         except AccessError as exc:
             self.events.publish(
                 {
@@ -341,6 +346,13 @@ class SouthboundRuntime:
             }
         )
         result_payload = result.get("result") or {}
+        if result_payload.get("execution") == "pending":
+            self.events.publish({
+                "type": "command.queued", "plane": "southbound", "direction": "down",
+                "source": source, "device_id": device_id, "capability": capability,
+                "command_id": result_payload["command_id"], "ok": True,
+            })
+            return result
         self.events.publish(
             {
                 "type": "state",

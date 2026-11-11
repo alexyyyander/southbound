@@ -20,6 +20,7 @@ class PolicyConfig:
     # Camera/microphone access is privacy-sensitive even when the capability
     # itself is read-only.
     allow_camera: bool = True
+    allow_screen_capture: bool = True
     allowed_rooms: list[str] | None = None
     allowed_kinds: list[str] | None = None
     allowed_adapters: list[str] | None = None
@@ -47,6 +48,8 @@ class PolicyEngine:
     ) -> Decision:
         config = self.config
         risk = capability.risk
+        if capability.sensitivity == "screen" and not config.allow_screen_capture:
+            return Decision(False, risk.value, reason="屏幕采集未启用（policy.allow_screen_capture=false）")
 
         if config.allowed_rooms and binding.room not in config.allowed_rooms:
             return Decision(
@@ -122,6 +125,8 @@ class PolicyEngine:
                 "medium",
                 reason="摄像头访问未启用（policy.allow_camera=false）",
             )
+        if capabilities and any(c.sensitivity == "screen" for c in capabilities) and not config.allow_screen_capture:
+            return Decision(False, "medium", reason="屏幕采集未启用（policy.allow_screen_capture=false）")
 
         if config.mode == "read_only":
             return Decision(False, "medium", reason="只读模式不允许接入新设备")

@@ -715,10 +715,12 @@
       .join("");
   }
 
+  let phoneTrace = 0;
   async function runGoal(goal) {
     if ($("#agent-run").disabled || state.composing) return;
     const button = $("#agent-run");
     const trace = $("#agent-trace");
+    const revision = ++phoneTrace;
     button.disabled = true;
     button.textContent = "执行中…";
     trace.innerHTML = '<p class="trace__empty">正在规划并调用工具…</p>';
@@ -729,12 +731,39 @@
         body: JSON.stringify({ goal }),
       });
       renderTrace(result);
+      if (result.execution === "pending" && result.command_id) watchPhone(result, revision);
       await refreshSim();
     } catch (error) {
       trace.innerHTML = `<p class="summary is-error">执行失败：${esc(error.message)}</p>`;
     } finally {
       button.disabled = false;
       button.textContent = "执行";
+    }
+  }
+
+  async function watchPhone(result, revision, attempt = 0) {
+    if (revision !== phoneTrace || attempt > 90) return;
+    try {
+      const reply = await api("/api/northbound/call", {method:"POST", headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({device_id:result.affected[0], capability:"command_status", arguments:{command_id:result.command_id}})});
+      if (revision !== phoneTrace) return;
+      const command = reply.result.command;
+      if (["queued", "leased"].includes(command.status)) {
+        setTimeout(() => watchPhone(result, revision, attempt + 1), 2000); return;
+      }
+      const success = command.status === "succeeded";
+      renderTrace({...result, ok:success, summary:success ? "手机已回报执行成功。" : `手机任务 ${command.status}：${command.result.error || "请检查连接或授权"}`});
+      const details = document.createElement("pre");
+      details.style.cssText="white-space:pre-wrap;overflow-wrap:anywhere";
+      details.textContent=JSON.stringify(command.result,null,2);
+      $("#agent-trace").appendChild(details);
+      if (command.result.artifact_id) {
+        const note=document.createElement("p");
+        note.textContent="截图已保存。Agent 可使用 iot_terminal_image 读取上方 artifact_id；图片需要主人凭据。";
+        $("#agent-trace").appendChild(note);
+      }
+    } catch (_) {
+      if (revision === phoneTrace) setTimeout(() => watchPhone(result, revision, attempt + 1), 2000);
     }
   }
 

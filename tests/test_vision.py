@@ -258,7 +258,8 @@ class McpVisionSurfaceTest(unittest.TestCase):
         self.assertIn("iot_vision_status", names)
         self.assertIn("iot_vision_snapshot", names)
         self.assertIn("iot_vision_observe", names)
-        self.assertEqual(len(tools), 31)
+        self.assertEqual(len(tools), 33)
+        self.assertTrue({"iot_intent", "iot_terminal_image"}.issubset({tool["name"] for tool in tools}))
 
 
 if __name__ == "__main__":

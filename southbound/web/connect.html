@@ -1,0 +1,8 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="referrer" content="no-referrer"><title>连接你的手机 · Southbound</title>
+<style>body{margin:0;background:#edf3ef;color:#183c32;font-family:system-ui,sans-serif}main{max-width:540px;margin:40px auto;padding:28px}small{letter-spacing:.15em}h1{font-size:34px;line-height:1.2}p{line-height:1.7;color:#53665f}.card{background:#fff;border-radius:20px;padding:24px;margin:18px 0;box-shadow:0 8px 32px #173e3208}.button{display:block;background:#205c47;color:white;border:0;border-radius:12px;padding:16px;text-align:center;text-decoration:none;font-size:17px;font-weight:600;margin:12px 0}.secondary{background:#edf3ef;color:#205c47}#status{white-space:pre-line;font-size:16px;line-height:1.7}.muted{font-size:13px}.off{opacity:.5;pointer-events:none}</style></head>
+<body><main><small>SOUTHBOUND · 手机接入</small><h1>让手机接收你的任务。</h1><p>首次安装，连接一次。以后直接下任务。</p>
+<div class="card"><b>① 安装 App</b><p>用手机打开此页，下载安装包。安装后回到这里继续。</p><a class="button secondary" href="/downloads/android.apk" download>下载 Android App · 0.5.2</a><p class="muted">首次安装可能需要允许浏览器安装应用；已经安装最新版可跳过。</p></div>
+<div class="card"><b>② 连接并启用</b><p>连接信息会自动带入 App。跟随提示允许通知和锁屏联网。</p><a class="button off" id="connect">连接并启用</a><a class="muted" id="fallback" hidden>浏览器未打开 App？点这里重试</a><p class="muted">随后在 App 点“测试锁屏任务”，30 秒内锁屏。</p></div>
+<div class="card"><b>连接与测试结果</b><p id="status">正在检查接入链接…</p><p class="muted">保持电脑开机，手机与电脑连接同一可互通的 Wi-Fi。此链接仅供你的手机使用。</p></div>
+<script src="/connect.js"></script></main></body></html>

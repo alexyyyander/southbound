@@ -14,3 +14,9 @@ config/access.local.json
 *.egg-info/
 build/
 dist/
+.gradle/
+local.properties
+*.apk
+*.aab
+*.jks
+clients/android/.local/

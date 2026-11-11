@@ -27,6 +27,13 @@
 
 发现局域网设备 → 判断端侧能力 → 受控接入 → 用统一工具调用真实或虚拟设备。
 
+新增 [Android 无障碍界面执行层](docs/ANDROID_UI.md)：手机执行读屏、点击、输入和滑动，中心 Agent 负责规划与核对。
+
+新增 [通用终端协议 v1 与 Android 接入](docs/TERMINAL_PROTOCOL.md)：手机、电脑、Pi
+通过统一 `endpoint` adapter 声明能力，共用主人配对、独立设备凭据、持久命令队列与回执。
+[Android 参考客户端](clients/android/README.md) 支持后台通知、TTS、电量采样，以及前台消息展示。支持二维码接入、自然语言通知/播报、只读硬件查询、系统授权截图和锁屏自测；锁屏联网需授予电池优化豁免。
+异步调用返回 queued 后需查询 command_status；不把入队视为执行完成。
+
 `Southbound` 取 IoT/电信架构里的 *southbound interface*：北向接口面向应用与 agent，南向接口面向设备。这个项目就是 agent 与设备之间的那一层。
 
 [![Southbound architecture breakdown](docs/ARCHITECTURE_BREAKDOWN.png)](docs/ARCHITECTURE_BREAKDOWN.md)
@@ -37,7 +44,7 @@
 
 - 设备以 `DeviceBinding` 的形式存在；
 - 能力以 `Capability` 暴露；
-- agent 只调用 `iot_call(device_id, capability, arguments)`；
+- agent 通过 `iot_call(device_id, capability, arguments)` 调用能力，手机常用自然语言指令也可使用 `iot_intent`；
 - 策略、审计、参数校验、协议适配都在工具层完成。
 
 它也不是：
@@ -67,7 +74,7 @@
 | **2.5D 房间实验** | `GET /scene`：可移动 avatar、presence 信号、点击设备、自动反射与回读验证 |
 | **Splat 预览** | `/scene` 内切换 WebGL 合成 splat：轨道旋转、设备热点、avatar 投影；同一控制层 |
 | **可视化** | 网络拓扑、设备清单、模拟端点、Agent 控制台、接入表单 |
-| **MCP** | 31 个工具：发现、深扫、LAN 图、交互端点、skills、observations、missions、视觉、模拟器、接入层、受控 onboarding |
+| **MCP** | 33 个工具：发现、深扫、LAN 图、交互端点、skills、observations、missions、视觉、模拟器、接入层、受控 onboarding |
 | **无硬件闭环** | 六个虚拟端点 + 确定性 agent trace，没有设备也能跑 |
 
 BLE / NFC 的配置、事件入口与无硬件演示见 [硬件适配器说明](docs/HARDWARE_ADAPTERS.md)。
@@ -319,7 +326,7 @@ claude mcp add --scope project southbound -- python3 /path/to/southbound/mcp_ser
 | LAN 图 | `lan_graph` |
 | 交互端点 | `interaction_endpoints`、`interaction_input` |
 | 模拟器 | `sim_devices`、`sim_action`、`sim_goal` |
-| 接入层 | `iot_hub_status`、`iot_devices_list`、`iot_device_describe`、`iot_tool_catalog`、`iot_call` |
+| 接入层 | `iot_hub_status`、`iot_devices_list`、`iot_device_describe`、`iot_tool_catalog`、`iot_call`、`iot_intent`、`iot_terminal_image` |
 | Skills | `iot_skills`、`iot_skill_describe`、`iot_skill_run`、`iot_skill_status` |
 | Observations | `iot_observe`、`iot_observations` |
 | Missions | `iot_missions`、`iot_mission_create`、`iot_mission_status`、`iot_mission_control` |
@@ -471,7 +478,7 @@ CI 在 Python 3.10–3.13 上跑 ruff、单元测试和 wheel/sdist 构建。
 - [Edge Skills 与硬件条件](docs/EDGE_SKILLS.md) — skill 合约、T0–T3 硬件、电源/网络/执行器/安全/隐私
 - [视觉感知](docs/VISION.md) — 摄像头来源、快照/运动 observation、本地证据与隐私边界
 - [Observations 与 Situation](docs/OBSERVATIONS.md) — 事件归一化、observation store、situation snapshot
-- [Missions](docs/MISSIONS.md) — proposed/approved/running/verified 状态机、审批与回读
+- [Missions](docs/MISSIONS.md) — 异步调度、审批、终端回执、恢复与验证
 - [共享 Runtime Service](docs/RUNTIME_SERVICE.md) — 一个设备图供 Dashboard / MCP / CLI 共用
 - [多硬件交互](docs/INTERACTION.md) — 端点、会话、模态路由与跨端 handoff
 - [架构拆解图](docs/ARCHITECTURE_BREAKDOWN.md) — harness / MCP / core / adapters / devices 分层
@@ -501,14 +508,14 @@ CI 在 Python 3.10–3.13 上跑 ruff、单元测试和 wheel/sdist 构建。
 - 多硬件交互面：端点注册、会话、模态路由、跨端 handoff、`/interaction` 面板；
 - Skill runtime：6 个 manifest、trigger/guard、shadow/proposed、AccessHub 执行、verify/fallback、4 个 MCP 工具；
 - Observation runtime：事件→结构化 observation、situation snapshot、2 个 MCP 工具；
-- Mission runtime：proposed/approved/running/verified 状态机、审批、动作执行与回读、4 个 MCP 工具；
+- Mission runtime：持久异步调度、审批、顺序动作与回执、completed/verified 完成状态、4 个 MCP 工具；
 - 远程 runtime client：`SOUTHBOUND_REMOTE_URL` / `southbound mcp --remote`；
 - 远程 runtime token 认证：loopback 免 token，非 loopback 需要 Bearer token；
 - 受控 onboarding / commissioning / 持久化 / 撤销；
 - 2.5D 房间实验：presence 信号、低风险自动反射、Agent notice、回读验证；
 - WebGL 合成 splat 预览：轨道相机、设备热点、avatar 投影；
 - 无主机 `survey`：Wi-Fi/BLE/radio 证据、服务指纹、Pi/Linux 支持、readiness 报告；
-- 31 个 MCP 工具；
+- 33 个 MCP 工具；
 - 168 项测试、CI、wheel/sdist。
 
 **下一步**
@@ -519,7 +526,7 @@ CI 在 Python 3.10–3.13 上跑 ruff、单元测试和 wheel/sdist 构建。
 - Matter 原生 controller、ESPHome 原生 API；
 - 真实 ESP32/Matter/Zigbee/BLE/NFC 硬件验证；
 - 视觉下一阶段：真实 RTSP/USB 摄像头验收、ONNX/Frigate 检测器、模型注册表与本地 VLM 描述；
-- **异步 Mission worker**：长时盯守、巡逻、录像任务需要持久队列、租约、取消与重试；
+- 异步 Mission worker 已支持持久调度、延迟启动、顺序回执、租约、取消和恢复；长时巡逻/录像等专用任务仍需对应设备能力；
 - **真实 3DGS 视觉层（可选）**：当前已有合成 splat 预览；真实照片级效果需要采集视频、COLMAP + nerfstudio/gsplat 训练，再把 `.splat` 资产接入同一 WebGL 层。2.5D 地图仍是设备锚点、碰撞、策略与审计的权威层；大文件放 `data/` 或 Git LFS，不提交真实家庭影像。
 
 ## 安全与边界

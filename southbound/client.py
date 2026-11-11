@@ -110,6 +110,9 @@ class RemoteRuntime:
         payload = self._request("GET", "/api/northbound/catalog")
         return list(payload.get("tools") or [])
 
+    def terminal_pairing(self, payload: dict[str, Any]) -> dict[str, Any]:
+        return self._request("POST", "/api/terminals/pairings", payload)
+
     def graph(self) -> dict[str, Any]:
         return self._request("GET", "/api/graph")
 
@@ -223,6 +226,8 @@ class RemoteRuntime:
         requires_approval: bool = True,
         metadata: dict[str, Any] | None = None,
         mission_id: str = "",
+        delay_s: float = 0,
+        timeout_s: float = 600,
     ) -> dict[str, Any]:
         return self._request(
             "POST",
@@ -234,6 +239,8 @@ class RemoteRuntime:
                 "requires_approval": requires_approval,
                 "metadata": metadata or {},
                 "mission_id": mission_id,
+                "delay_s": delay_s,
+                "timeout_s": timeout_s,
             },
         )
 
@@ -251,8 +258,26 @@ class RemoteRuntime:
             {"actor": actor, "confirm": confirm},
         )
 
-    def intent(self, goal: str) -> dict[str, Any]:
-        return self._request("POST", "/api/northbound/intent", {"goal": goal})
+    def intent(self, goal: str, context: dict | None = None) -> dict[str, Any]:
+        return self._request("POST", "/api/northbound/intent", {"goal": goal, "context": context or {}})
+
+    def terminal_image(self, artifact_id: str) -> tuple[str, bytes]:
+        import re
+        if not re.fullmatch(r"[a-f0-9]{32}", artifact_id):
+            raise ValueError("invalid artifact_id")
+        request = urllib.request.Request(self.base_url + "/api/terminals/images/" + artifact_id,
+                                         headers={"Authorization": "Bearer " + self.token})
+        try:
+            with urllib.request.urlopen(request, timeout=self.timeout) as response:
+                data = response.read(512 * 1024 + 1)
+                mime = response.headers.get("Content-Type")
+                if mime != "image/jpeg" or len(data) > 512 * 1024:
+                    raise ValueError("invalid screenshot response")
+                return mime, data
+        except urllib.error.HTTPError as exc:
+            raise RemoteAccessError("screenshot unavailable or access denied", status=exc.code) from exc
+        except urllib.error.URLError as exc:
+            raise RemoteAccessError("screenshot service unavailable") from exc
 
     def call(
         self,

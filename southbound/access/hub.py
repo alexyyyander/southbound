@@ -135,6 +135,14 @@ class AccessHub:
             raise UnknownDevice(f"未知设备：{device_id}")
         return binding.snapshot()
 
+    def refresh_binding(self, binding: DeviceBinding) -> None:
+        """Atomically refresh capabilities without an unbound-device window."""
+        with self._event_lock:
+            previous = self._bindings.get(binding.device_id)
+            if previous is None or previous.adapter != binding.adapter:
+                raise AccessError("binding refresh requires the same device and adapter")
+            self._bindings[binding.device_id] = binding
+
     def has_binding(self, device_id: str) -> bool:
         return device_id in self._bindings
 
@@ -161,6 +169,7 @@ class AccessHub:
         capability_name: str,
         arguments: dict[str, Any] | None = None,
         confirm: bool = False,
+        idempotency_key: str = "",
     ) -> dict[str, Any]:
         if self._closed:
             raise AdapterUnavailable("access hub is closed")
@@ -207,7 +216,13 @@ class AccessHub:
             raise AdapterUnavailable(message)
 
         try:
-            result = adapter.call(binding, capability, arguments)
+            if idempotency_key:
+                call_once = getattr(adapter, "call_idempotent", None)
+                if not callable(call_once):
+                    raise ValidationError("adapter does not support idempotent dispatch")
+                result = call_once(binding, capability, arguments, idempotency_key)
+            else:
+                result = adapter.call(binding, capability, arguments)
         except AccessError as exc:
             self._audit(
                 binding, capability, arguments, confirm, ok=False, error=str(exc)

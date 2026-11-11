@@ -476,6 +476,14 @@ class SkillRunner:
         except Exception as exc:
             return {"ok": False, "reason": f"device list failed: {exc}", "missing": []}
         kind_set = {item.get("kind") for item in devices}
+        for action in manifest.get("actions") or []:
+            for device in devices:
+                if device.get("device_id") != action.get("device_id"):
+                    continue
+                if any(c.get("name") == action.get("capability") and c.get("returns") == "command"
+                       for c in device.get("capabilities") or []):
+                    return {"ok": False, "reason": "asynchronous terminal action requires command receipts",
+                            "missing": []}
         capabilities = {
             capability.get("name")
             for item in devices

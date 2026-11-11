@@ -32,6 +32,7 @@ from .interaction import InteractionService, InteractionStore
 from .paths import DATA_DIR, SKILLS_DIR
 from .runtime import EventBus, SouthboundRuntime
 from .skills import SkillRegistry, SkillRunner
+from .access.terminal_capabilities import TERMINAL_ACTIONS
 
 _RUNTIMES: list[SouthboundRuntime | RemoteRuntime] = []
 
@@ -214,6 +215,35 @@ def cmd_call(args: argparse.Namespace) -> int:
 def cmd_access(_args: argparse.Namespace) -> int:
     runtime = _runtime()
     print(json.dumps(runtime.status(), ensure_ascii=False, indent=2))
+    return 0
+
+
+def cmd_terminal_pair(args: argparse.Namespace) -> int:
+    url = args.url or os.environ.get("SOUTHBOUND_REMOTE_URL", "http://127.0.0.1:8765")
+    token = os.environ.get("SOUTHBOUND_REMOTE_TOKEN") or os.environ.get("SOUTHBOUND_RUNTIME_TOKEN", "")
+    if not token:
+        print("Set SOUTHBOUND_REMOTE_TOKEN to the runtime owner's token", file=sys.stderr)
+        return 1
+    try:
+        connect = getattr(args, "connect", False)
+        if connect:
+            from .onboarding import setup_link
+            setup_link(url, "validate")
+            if args.qr:
+                import segno
+        result = RemoteRuntime(url, token=token).terminal_pairing({
+            "device_id": args.device_id, "name": args.name or args.device_id,
+            "room": args.room, "capabilities": args.capabilities, "confirm": args.confirm,
+        })
+        if connect:
+            result["connect_url"] = setup_link(url, result["pairing_code"])
+            if args.qr:
+                segno.make(result["connect_url"], micro=False).save(args.qr, scale=8, border=4)
+                result["qr_file"] = str(Path(args.qr).resolve())
+    except (AccessError, ValueError, OSError, ImportError) as exc:
+        print(f"terminal pairing error: {exc}", file=sys.stderr)
+        return 1
+    print(json.dumps(result, ensure_ascii=False, indent=2))
     return 0
 
 
@@ -635,6 +665,24 @@ def build_parser() -> argparse.ArgumentParser:
 
     p = sub.add_parser("access", help="show adapters, policy, and audit status")
     p.set_defaults(func=cmd_access)
+
+    p = sub.add_parser("terminal-pair", help="create an owner-approved terminal pairing code")
+    p.add_argument("device_id")
+    p.add_argument("--name", default="")
+    p.add_argument("--room", default="")
+    p.add_argument("--url", default="", help="shared runtime URL")
+    p.add_argument("--capabilities", nargs="+", choices=list(TERMINAL_ACTIONS), required=True)
+    p.add_argument("--confirm", action="store_true")
+    p.set_defaults(func=cmd_terminal_pair)
+
+    p = sub.add_parser("terminal-connect", help="create a one-click phone setup link and optional QR code")
+    p.add_argument("device_id")
+    p.add_argument("--url", required=True, help="phone-reachable runtime root URL")
+    p.add_argument("--name", default="")
+    p.add_argument("--room", default="")
+    p.add_argument("--qr", default="", help="write QR .png or .svg; requires southbound[android]")
+    p.add_argument("--confirm", action="store_true")
+    p.set_defaults(func=cmd_terminal_pair, connect=True, capabilities=list(TERMINAL_ACTIONS))
 
     p = sub.add_parser("graph", help="show the durable LAN device graph")
     p.add_argument("--device", default="", help="show one graph device by id")

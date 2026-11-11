@@ -12,6 +12,7 @@ from typing import Any, Iterable
 
 from .errors import ValidationError
 from .models import Capability, DeviceBinding, Risk
+from .terminal_capabilities import TERMINAL_CAPABILITIES
 
 _BRIGHTNESS = {
     "type": "integer",
@@ -38,6 +39,7 @@ _MODE = {
 }
 
 CAPABILITIES: dict[str, dict[str, Capability]] = {
+    "terminal": TERMINAL_CAPABILITIES,
     "ble_device": {
         "read": Capability("read", "读取已绑定的 BLE GATT 特征（十六进制）", Risk.READ),
         "subscribe": Capability("subscribe", "订阅已绑定的 BLE GATT 通知", Risk.READ),

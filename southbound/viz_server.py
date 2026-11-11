@@ -51,21 +51,23 @@ from .observations import ObservationService, ObservationStore
 from .paths import DATA_DIR, WEB_DIR, SKILLS_DIR
 from .runtime import EventBus, SouthboundRuntime
 from .scene import SceneController
-from .service_auth import is_authorized
 from .skills import SkillRegistry, SkillRunner
 from .vision import PerceptionService
+from .terminal_http import TerminalHTTPMixin, runtime_authorized
+from .terminal_service import TerminalService
 
 STATE_DB = DATA_DIR / "lan_state.sqlite3"
 GRAPH = LANGraph(STATE_DB)
 
 
 def _dashboard_config() -> dict:
-    """Make the camera adapter available for the dashboard demo.
+    """Make camera and terminal enrollment available in the shared service.
 
     Other entry points stay explicit: only ``southbound serve`` injects an
     empty, enabled camera adapter so the vision panel can commission a
     synthetic camera without editing configuration first. An explicit
-    ``camera`` section from the user's config always wins.
+    ``camera`` section from the user's config always wins. The empty endpoint
+    adapter exposes no capabilities until an owner approves a terminal pairing.
     """
 
     config = load_config()
@@ -74,6 +76,7 @@ def _dashboard_config() -> dict:
         adapters = {}
         config["adapters"] = adapters
     adapters.setdefault("camera", {"enabled": True, "cameras": []})
+    adapters.setdefault("endpoint", {"enabled": True})
     return config
 
 
@@ -132,7 +135,7 @@ def _vision_status() -> dict:
 RUNTIME.ingest_lan(_load_json("inventory.json"), _load_json("deep_scan.json"))
 
 
-class Handler(BaseHTTPRequestHandler):
+class Handler(TerminalHTTPMixin, BaseHTTPRequestHandler):
     server_version = "SouthboundDemo/0.14"
 
     def log_message(self, fmt: str, *args) -> None:  # keep stdout clean
@@ -142,7 +145,7 @@ class Handler(BaseHTTPRequestHandler):
         if not path.startswith("/api/"):
             return True
         token = getattr(self.server, "runtime_token", "")
-        return is_authorized(
+        return runtime_authorized(
             self.client_address[0],
             self.headers.get("Authorization"),
             token,
@@ -176,6 +179,25 @@ class Handler(BaseHTTPRequestHandler):
     def do_GET(self) -> None:
         parsed = urlparse(self.path)
         path = parsed.path
+        if path == "/connect":
+            self._static("connect.html")
+            return
+        if path == "/downloads/android.apk":
+            apk = Path(os.environ.get("SOUTHBOUND_ANDROID_APK", str(WEB_DIR.parent.parent / "clients/android/app/build/outputs/apk/debug/app-debug.apk")))
+            if not apk.is_file():
+                self._json({"error": "Android APK not built; ask the server owner to build it"}, status=404)
+                return
+            data = apk.read_bytes()
+            self.send_response(200)
+            self.send_header("Content-Type", "application/vnd.android.package-archive")
+            self.send_header("Content-Disposition", 'attachment; filename="southbound.apk"')
+            self.send_header("Content-Length", str(len(data)))
+            self.send_header("Cache-Control", "no-store")
+            self.end_headers()
+            self.wfile.write(data)
+            return
+        if self._terminal_request(path, "GET"):
+            return
         if not self._authorized(path):
             self._unauthorized()
             return
@@ -420,6 +442,8 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_POST(self) -> None:
         path = urlparse(self.path).path
+        if self._terminal_request(path, "POST"):
+            return
         if not self._authorized(path):
             self._unauthorized()
             return
@@ -435,7 +459,8 @@ class Handler(BaseHTTPRequestHandler):
         body = self._body()
         if path in ("/api/agent", "/api/northbound/intent"):
             goal = str(body.get("goal", "")).strip()
-            self._json(RUNTIME.intent(goal))
+            context = body.get("context")
+            self._json(RUNTIME.intent(goal, context=context if isinstance(context, dict) else None))
             return
         if path in ("/api/northbound/commission", "/api/access/commission"):
             try:
@@ -505,6 +530,8 @@ class Handler(BaseHTTPRequestHandler):
                     requires_approval=bool(body.get("requires_approval", True)),
                     metadata=body.get("metadata") or {},
                     mission_id=str(body.get("mission_id", "")),
+                    delay_s=body.get("delay_s", 0),
+                    timeout_s=body.get("timeout_s", 600),
                 )
             except MissionError as exc:
                 self._json({"ok": False, "error": str(exc)}, status=400)
@@ -764,6 +791,7 @@ def serve(
         )
     server = ThreadingHTTPServer((host, port), Handler)
     server.runtime_token = token
+    server.terminal_service = TerminalService(RUNTIME, MISSIONS)
     url = f"http://{host}:{port}/"
     print(f"Southbound demo running at {url}", flush=True)
     print(f"Southbound 2.5D room at {url}scene", flush=True)
@@ -772,6 +800,7 @@ def serve(
     if open_browser:
         webbrowser.open(url)
     OBSERVATIONS.start()
+    MISSIONS.start()
     SKILL_RUNNER.start()
     PERCEPTION.start()
     try:
@@ -782,8 +811,8 @@ def serve(
         server.server_close()
         PERCEPTION.stop()
         SKILL_RUNNER.stop()
-        OBSERVATIONS.close()
         MISSIONS.close()
+        OBSERVATIONS.close()
         INTERACTION.close()
         RUNTIME.close()
 

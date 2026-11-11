@@ -3,7 +3,7 @@
 A mission is a durable plan of capability calls, not a free-form prompt. It
 moves through::
 
-    proposed -> approved -> running -> verified / failed
+    proposed -> approved -> running -> completed / verified / failed
                   \\-> cancelled
 
 Every action still goes through ``runtime.call`` (AccessHub policy, audit,
@@ -18,6 +18,7 @@ ObservationService is attached.
 from __future__ import annotations
 
 import json
+import math
 import re
 import sqlite3
 import threading
@@ -34,6 +35,7 @@ MISSION_STATUSES = {
     "approved",
     "running",
     "verified",
+    "completed",
     "failed",
     "cancelled",
 }
@@ -176,6 +178,11 @@ class MissionStore:
                 updated_at TEXT NOT NULL DEFAULT ''
             );
             CREATE INDEX IF NOT EXISTS missions_updated ON missions(updated_at DESC);
+            CREATE TABLE IF NOT EXISTS mission_jobs (
+                mission_id TEXT PRIMARY KEY, progress TEXT NOT NULL,
+                run_after REAL NOT NULL, deadline REAL NOT NULL,
+                lease_owner TEXT NOT NULL DEFAULT '', lease_until REAL NOT NULL DEFAULT 0
+            );
             """)
         if self.path is not None:
             self._conn.execute("PRAGMA journal_mode=WAL")
@@ -222,6 +229,7 @@ class MissionStore:
             "result": "result",
             "error": "error",
             "verify": "verify",
+            "updated_at": "updated_at",
         }
         assignments = []
         values = []
@@ -294,8 +302,15 @@ class MissionService:
         self.runtime = runtime
         self.observations = observations
         self.store = store or MissionStore()
+        self.execution_lock = threading.RLock()
+        from .mission_worker import MissionWorker
+        self.worker = MissionWorker(self)
+
+    def start(self) -> None:
+        self.worker.start()
 
     def close(self) -> None:
+        self.worker.stop()
         self.store.close()
 
     def _emit(self, event_type: str, mission: dict[str, Any], **extra: Any) -> None:
@@ -334,10 +349,18 @@ class MissionService:
         requires_approval: bool = True,
         metadata: dict[str, Any] | None = None,
         mission_id: str = "",
+        delay_s: float = 0,
+        timeout_s: float = 600,
     ) -> dict[str, Any]:
         goal = _text(goal)
         if not goal:
             raise MissionError("goal is required")
+        for name, value, minimum, maximum in (
+            ("delay_s", delay_s, 0, 86400 * 30), ("timeout_s", timeout_s, 10, 86400),
+        ):
+            if (isinstance(value, bool) or not isinstance(value, (int, float))
+                    or not math.isfinite(value) or not minimum <= value <= maximum):
+                raise MissionError(f"{name} must be a finite number in {minimum}..{maximum}")
         normalized = _normalize_actions(actions)
         checks = _normalize_verify(verify)
         identifier = _text(mission_id) or f"mission_{uuid.uuid4().hex[:12]}"
@@ -357,7 +380,7 @@ class MissionService:
             "approved_by": "",
             "result": {},
             "error": "",
-            "metadata": dict(metadata or {}),
+            "metadata": {**dict(metadata or {}), "schedule": {"delay_s": delay_s, "timeout_s": timeout_s}},
             "created_at": now,
             "updated_at": now,
         }
@@ -377,6 +400,10 @@ class MissionService:
     def approve(
         self, mission_id: str, actor: str = "owner", confirm: bool = False
     ) -> dict[str, Any]:
+        with self.execution_lock:
+            return self._approve(mission_id, actor, confirm)
+
+    def _approve(self, mission_id: str, actor: str, confirm: bool) -> dict[str, Any]:
         mission = self.get(mission_id)
         if mission["status"] != "proposed":
             raise MissionStateError(
@@ -392,119 +419,24 @@ class MissionService:
         return mission
 
     def run(self, mission_id: str) -> dict[str, Any]:
-        mission = self.get(mission_id)
-        if mission["status"] == "proposed":
-            raise MissionDenied("mission requires approval before run")
-        if mission["status"] not in ("approved",):
-            raise MissionStateError(
-                f"mission is {mission['status']}, expected approved"
-            )
-        mission = self.store.update(mission_id, status="running", error="")
-        self._emit("mission.started", mission)
-        results = []
-        try:
-            for action in mission["actions"]:
-                result = self.runtime.call(
-                    action["device_id"],
-                    action["capability"],
-                    dict(action.get("arguments") or {}),
-                    confirm=bool(action.get("confirm", False)),
-                    source=f"mission:{mission_id}",
-                )
-                results.append(result)
-                self._emit(
-                    "mission.action",
-                    self.store.get(mission_id) or mission,
-                    action=action,
-                    result=result,
-                )
-        except Exception as exc:
-            failed = self.store.update(
-                mission_id,
-                status="failed",
-                error=str(exc),
-                result={"actions": results, "error": str(exc)},
-            )
-            self._emit(
-                "mission.failed",
-                failed,
-                error=str(exc),
-                result=failed["result"],
-                ok=False,
-            )
-            return failed
-        verification = self._verify(mission)
-        if not all(item["ok"] for item in verification):
-            failed = self.store.update(
-                mission_id,
-                status="failed",
-                error="state verification failed",
-                result={"actions": results, "verification": verification},
-            )
-            self._emit(
-                "mission.failed",
-                failed,
-                error="state verification failed",
-                result=failed["result"],
-                ok=False,
-            )
-            return failed
-        verified = self.store.update(
-            mission_id,
-            status="verified",
-            result={"actions": results, "verification": verification},
-        )
-        self._emit("mission.verified", verified, result=verified["result"])
-        return verified
+        """Persist a job and return immediately; the worker advances it later."""
+        with self.execution_lock:
+            mission = self.get(mission_id)
+            if mission["status"] == "proposed":
+                raise MissionDenied("mission requires approval before run")
+            if mission["status"] == "running":
+                return mission
+            if mission["status"] != "approved":
+                raise MissionStateError(f"mission is {mission['status']}, expected approved")
+            return self.worker.enqueue(mission)
 
     def cancel(self, mission_id: str, actor: str = "owner") -> dict[str, Any]:
-        mission = self.get(mission_id)
-        if mission["status"] not in ("proposed", "approved"):
-            raise MissionStateError(f"mission is {mission['status']}, cannot cancel")
-        cancelled = self.store.update(mission_id, status="cancelled")
-        self._emit("mission.cancelled", cancelled, actor=_text(actor) or "owner")
-        return cancelled
-
-    def _verify(self, mission: dict[str, Any]) -> list[dict[str, Any]]:
-        checks = mission.get("verify") or []
-        if not checks:
-            return []
-        state = self._device_state()
-        out = []
-        for spec in checks:
-            device_id = spec["device_id"]
-            field = spec["field"]
-            device_state = state.get(device_id) or {}
-            value = device_state.get(field)
-            ok = _matches(value, spec)
-            out.append(
-                {
-                    "device_id": device_id,
-                    "field": field,
-                    "value": value,
-                    "expected": spec.get("equals", spec.get("value")),
-                    "ok": ok,
-                }
-            )
-        return out
-
-    def _device_state(self) -> dict[str, dict[str, Any]]:
-        result: dict[str, dict[str, Any]] = {}
-        graph = getattr(self.runtime, "graph", None)
-        if graph is not None:
-            try:
-                for device in graph.snapshot().get("devices") or []:
-                    state = device.get("state")
-                    if isinstance(state, dict):
-                        result[device["device_id"]] = state
-            except Exception:
-                pass
-        if not result:
-            simulator = getattr(self.runtime, "simulator", None)
-            if simulator is not None:
-                try:
-                    for device in simulator.list_devices():
-                        result[device["id"]] = dict(device.get("state") or {})
-                except Exception:
-                    pass
-        return result
+        with self.execution_lock:
+            with self.store._lock:
+                mission = self.get(mission_id)
+                if mission["status"] not in ("proposed", "approved", "running"):
+                    raise MissionStateError(f"mission is {mission['status']}, cannot cancel")
+                cancelled = self.store.update(mission_id, status="cancelled")
+            self.worker.cleanup_cancelled()
+            self._emit("mission.cancelled", cancelled, actor=_text(actor) or "owner")
+            return self.get(mission_id)

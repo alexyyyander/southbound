@@ -113,9 +113,15 @@ def _camera(config: dict, _simulator: Simulator | None) -> DeviceAdapter:
     return CameraAdapter(config)
 
 
+def _endpoint(config: dict, _simulator: Simulator | None) -> DeviceAdapter:
+    from .adapters.endpoint import EndpointAdapter
+
+    return EndpointAdapter(config)
+
+
 REGISTRY = AdapterRegistry()
 _HOME_KINDS = tuple(
-    k for k in CAPABILITIES if k not in ("ble_device", "nfc_reader", "camera")
+    k for k in CAPABILITIES if k not in ("ble_device", "nfc_reader", "camera", "terminal")
 )
 REGISTRY.register(
     AdapterSpec(
@@ -141,6 +147,7 @@ REGISTRY.register(
 )
 REGISTRY.register(AdapterSpec("ble", _ble, ("ble_device",), ("connection",)))
 REGISTRY.register(AdapterSpec("nfc", _nfc, ("nfc_reader",), ("connection",)))
+REGISTRY.register(AdapterSpec("endpoint", _endpoint, ("terminal",)))
 REGISTRY.register(
     AdapterSpec(
         "camera",
