@@ -8,6 +8,7 @@
 - [架构拆解图](ARCHITECTURE_BREAKDOWN.md) — Agent harness、MCP、Southbound core、adapters、物理设备与部署 profile
 - [共享 Runtime Service](RUNTIME_SERVICE.md) — 一个设备图供 Dashboard / MCP / CLI 共用，远程调用与安全边界
 - [多硬件交互](INTERACTION.md) — 端点、会话、模态路由、跨端 handoff 与 `/interaction` 面板
+- [机械臂阅读角](ROBOT.md) — 三条虚拟机械臂、阅读/专注/按咖啡机/急停/复位与真实机械臂路线
 - [BLE / NFC 与设备事件](HARDWARE_ADAPTERS.md) — 统一适配器注册、真实驱动、模拟演示与验证边界
 
 - [About Southbound](ABOUT.md) — 项目定位、命名由来、设计原则与边界

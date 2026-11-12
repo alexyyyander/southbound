@@ -6,6 +6,17 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- **Robot reading corner**: three simulated 6-DOF-style arms (`arm_lamp`,
+  `arm_display`, `arm_gripper`) with `home`, `move_pose`, `look_at`, `point`,
+  `set_light`, `set_display`, `press`, `grab`, `release`, `stop`, and `reset`
+  capabilities. Reading/focus/coffee/stop/reset scenes execute through
+  AccessHub policy, audit, and emergency-stop semantics; `/robot` provides a
+  visual reading-corner demo and `/api/robot/state` + `/api/robot/scene` expose
+  the state and scene runner. Tests cover scene execution, physical button
+  press, e-stop/reset, and raw arm motion (174 tests total).
+
 ## [0.14.0] - 2026-11-03
 
 ### Added
@@ -32,7 +43,6 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   STILL/MOTION state, evidence hash, capture and remove actions; the demo can
   commission a synthetic camera in one click.
 - `docs/VISION.md`, camera config examples, and 13 vision tests (168 total).
-
 ## [0.13.0] - 2026-11-02
 
 ### Added

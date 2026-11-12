@@ -80,17 +80,18 @@ southbound mcp
 | `graph.py` | 持久化 LAN 图：身份合并、控制范围、来源、缓存状态；SQLite | 可用 |
 | `event_store.py` | 持久事件日志：跨重启 id、最近事件重放 | 可用 |
 | `interaction.py` | 多硬件交互端点、会话、模态路由、跨端 handoff | 可用 |
+| `robot.py` | 三条虚拟机械臂（灯/显示/夹爪）+ 阅读角场景；动作经过 AccessHub | 可用（模拟） |
 | `mcp_server.py` | stdio MCP，31 个工具：发现、深扫、LAN 图、交互端点、skills、observations、missions、vision、模拟器、接入层、受控 onboarding | 可用 |
 | `skills.py` | SkillRegistry / SkillRunner：manifest 校验、trigger/guard、shadow/proposed、AccessHub 执行、verify/fallback | 可用 |
 | `observations.py` | ObservationStore / ObservationService：事件归一化、situation snapshot、SQLite 持久化 | 可用 |
 | `missions.py` | MissionStore / MissionService：proposed→approved→running→verified/failed/cancelled、审批、回读 | 可用 |
 | `vision.py` | MotionDetector / PerceptionService：摄像头采样、灰度帧差、`vision.*` 事件与本地证据 | 可用（MVP） |
 | `cli.py` | 统一 CLI，含 `tools` / `call` / `graph` / `onboard` / `decommission` / `access` | 可用 |
-| `access/` | 设备/能力模型、参数校验、策略、审计、AccessHub、受控接入、七类 adapter（含 camera） | 可用 |
+| `access/` | 设备/能力模型、参数校验、策略、审计、AccessHub、受控接入、八类 adapter（含 camera/arm 模拟） | 可用 |
 | `access/commissioning.py` | 已授权设备的非敏感持久化记录与启动恢复 | 可用 |
 | `config/access.example.json` | HA / MQTT / Zigbee2MQTT 配置示例 | 可用 |
 | `southbound/web/` | 观测站风格可视化面板 | 可用 |
-| `tests/` | 标准库 unittest，覆盖分级、模拟闭环、接入层策略与审计、运行时/事件总线、远程 runtime client/token、受控接入、LAN 图与事件持久化、HA WebSocket 事件、多硬件交互、2.5D 场景、survey、skill runtime、摄像头快照/运动检测/observation 投影 | 168 项通过 |
+| `tests/` | 标准库 unittest，覆盖分级、模拟闭环、接入层策略与审计、运行时/事件总线、远程 runtime client/token、受控接入、LAN 图与事件持久化、HA WebSocket 事件、多硬件交互、机械臂场景/急停、2.5D 场景、survey、skill runtime、摄像头快照/运动检测/observation 投影 | 174 项通过 |
 
 ### 接入工具层
 
@@ -218,7 +219,7 @@ synthetic、file、USB（OpenCV）和 RTSP（ffmpeg），快照落本地 `data/v
 | 局域网发现 | ARP + mDNS + SSDP | 高 | 客户端隔离、多播被屏蔽、休眠设备 | 平坦网段可靠；跨 VLAN 需额外部署 |
 | 设备指纹 | 端口 + banner + OUI | 中高 | 随机 MAC、厂商私有协议、设备休眠 | 足够做接入规划；精确识别需 DHCP/DHCPv6 租约 |
 | T0–T3 分级 | 规则引擎 | 中 | 未知厂商、型号歧义 | 作为规划启发式可用，需标注置信度 |
-| 接入工具层 | AccessHub + 七类 adapter | 高 | 真实设备鉴权、协议差异 | 模型/策略/审计/目录已完成；协议执行按 adapter 扩展 |
+| 接入工具层 | AccessHub + 八类 adapter | 高 | 真实设备鉴权、协议差异 | 模型/策略/审计/目录已完成；协议执行按 adapter 扩展 |
 | 受控 onboarding | commission / decommission + 持久化 | 高 | 真实配对、隔离区、审批 UI | 受控接入已跑通；自动扩散明确不做 |
 | 运行时与事件流 | SouthboundRuntime + EventBus + SSE + 持久事件日志 | 高 | 跨进程一致性、背压 | 单进程闭环已跑通；`southbound serve` 已支持共享 runtime，远程认证/TLS 是下一步 |
 | ESP32 / ESPHome 控制 | Sim 完整；真实设备经 HA/MQTT adapter | 高（有硬件） | 刷机、引脚、供电 | 最小闭环最成熟的一条路 |
@@ -261,6 +262,7 @@ synthetic、file、USB（OpenCV）和 RTSP（ffmpeg），快照落本地 `data/v
 - **P1.8 Observation / Mission（已完成）**：事件归一化为 observation，situation snapshot；mission proposed/approved/running/verified/failed 状态机、审批、动作回读和 observation 写入。
 - **P1.9 视觉感知 MVP（已完成）**：CameraAdapter（synthetic/file/USB/RTSP）、AccessHub 快照能力、`policy.allow_camera` 隐私门、纯本地运动检测、`vision.*` observation、MCP/HTTP/Dashboard 接入；真实摄像头与目标检测器是下一步。
 - **P1.7 多硬件交互面（已完成）**：端点注册、session、模态路由、跨端 handoff、`/interaction` 面板；文本轮次已跑通，真实音频/边缘 shell 仍待硬件。
+- **P1.8 机械臂阅读角（已完成，模拟）**：灯臂、显示臂、夹爪臂、阅读/专注/按咖啡机/急停/复位场景；动作经过 AccessHub，`/robot` 可视化。真实机械臂需要 ROS2/MoveIt2、力控、工作空间限制与急停复位。
 - **P2 第一条真实链路**：ESP32-S3 + ESPHome + 一个 Matter Wi-Fi 插座；HA/MQTT 落在 NAS；先经 HA/MQTT adapter 接入。
 - **P3 Zigbee 与事件流（部分完成）**：SLZB-06 + zigbee2mqtt；MQTT/Z2M、BLE/NFC 和 HA WebSocket 事件已进入统一 EventBus；真实 Zigbee 硬件与 Z2M 现场验证仍未完成。
 - **P4 LLM planner**：在 sim_agent 的工具层上接本地 3B 模型；加策略引擎、审计与回滚。

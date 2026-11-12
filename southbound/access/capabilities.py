@@ -145,6 +145,77 @@ CAPABILITIES: dict[str, dict[str, Capability]] = {
         "unlock": Capability("unlock", "开锁", Risk.HIGH),
         "read": Capability("read", "读取锁状态", Risk.READ),
     },
+    "robot_arm": {
+        "read": Capability("read", "读取机械臂状态", Risk.READ),
+        "home": Capability("home", "机械臂回到安全停靠位", Risk.LOW),
+        "stop": Capability("stop", "立即停止机械臂", Risk.LOW),
+        "reset": Capability("reset", "清除急停并恢复待机", Risk.MEDIUM),
+        "move_pose": Capability(
+            "move_pose",
+            "移动机械臂末端到工作空间坐标",
+            Risk.MEDIUM,
+            parameters={
+                "x": {"type": "integer", "minimum": 0, "maximum": 100},
+                "y": {"type": "integer", "minimum": 0, "maximum": 100},
+                "z": {"type": "integer", "minimum": 0, "maximum": 100},
+            },
+            required=("x", "y", "z"),
+        ),
+        "look_at": Capability(
+            "look_at",
+            "让灯臂/显示臂朝向目标",
+            Risk.LOW,
+            parameters={"target": {"type": "string", "maxLength": 80}},
+            required=("target",),
+        ),
+        "point": Capability(
+            "point",
+            "指向一个目标",
+            Risk.LOW,
+            parameters={"target": {"type": "string", "maxLength": 80}},
+            required=("target",),
+        ),
+        "set_light": Capability(
+            "set_light",
+            "调整灯臂亮度与色温",
+            Risk.LOW,
+            parameters={
+                "brightness": _BRIGHTNESS,
+                "warmth": {
+                    "type": "integer",
+                    "minimum": 2200,
+                    "maximum": 6500,
+                    "description": "色温 Kelvin",
+                },
+            },
+            required=("brightness",),
+        ),
+        "set_display": Capability(
+            "set_display",
+            "设置显示臂上的内容",
+            Risk.LOW,
+            parameters={
+                "text": {"type": "string", "maxLength": 160},
+                "on": {"type": "boolean"},
+            },
+            required=("text",),
+        ),
+        "press": Capability(
+            "press",
+            "夹爪按压一个物理按钮",
+            Risk.MEDIUM,
+            parameters={"target": {"type": "string", "maxLength": 80}},
+            required=("target",),
+        ),
+        "grab": Capability(
+            "grab",
+            "夹爪抓取小物件",
+            Risk.MEDIUM,
+            parameters={"target": {"type": "string", "maxLength": 80}},
+            required=("target",),
+        ),
+        "release": Capability("release", "释放夹爪中的物件", Risk.MEDIUM),
+    },
 }
 
 

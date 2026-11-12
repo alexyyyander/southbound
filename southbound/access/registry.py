@@ -113,6 +113,12 @@ def _camera(config: dict, _simulator: Simulator | None) -> DeviceAdapter:
     return CameraAdapter(config)
 
 
+def _arm(_config: dict, _simulator: Simulator | None) -> DeviceAdapter:
+    from .adapters.arm import RobotArmAdapter
+
+    return RobotArmAdapter()
+
+
 REGISTRY = AdapterRegistry()
 _HOME_KINDS = tuple(
     k for k in CAPABILITIES if k not in ("ble_device", "nfc_reader", "camera")
@@ -149,3 +155,4 @@ REGISTRY.register(
         ("source", "path", "url_env", "index"),
     )
 )
+REGISTRY.register(AdapterSpec("arm", _arm, ("robot_arm",)))

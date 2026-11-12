@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Southbound · Robot Reading Corner</title>
+  <link rel="stylesheet" href="/robot.css">
+</head>
+<body>
+  <header class="top">
+    <a class="brand" href="/">Southbound</a>
+    <nav>
+      <a href="/">控制台</a>
+      <a href="/scene">2.5D</a>
+      <a href="/interaction">Interaction</a>
+      <a class="active" href="/robot">Robot</a>
+    </nav>
+  </header>
+
+  <main>
+    <section class="intro">
+      <p class="eyebrow">RECONFIGURABLE READING CORNER</p>
+      <h1>空间会为你重排。</h1>
+      <p class="lede">灯臂把光带过来，显示臂把屏幕转向你，夹爪臂去按普通咖啡机的按钮。三条臂共享同一套 AccessHub 策略、审计和急停。</p>
+    </section>
+
+    <div id="estop-banner" class="estop" hidden>急停已触发 · 所有动作被阻止，先复位</div>
+
+    <section class="stage">
+      <div id="arms" class="arms"></div>
+      <aside class="side">
+        <section class="panel">
+          <p class="eyebrow">SCENES</p>
+          <h2>让房间做一件事</h2>
+          <div id="scenes" class="scenes"></div>
+        </section>
+        <section class="panel">
+          <p class="eyebrow">LAST SCENE</p>
+          <h2 id="scene-title">尚未执行</h2>
+          <p id="scene-description" class="muted">选择一个场景，观察三条臂如何协同。</p>
+          <div id="steps" class="steps"></div>
+        </section>
+      </aside>
+    </section>
+
+    <section class="panel log-panel">
+      <div class="panel-head">
+        <div>
+          <p class="eyebrow">TRACE</p>
+          <h2>场景事件</h2>
+        </div>
+        <span id="arm-summary" class="mono">读取中…</span>
+      </div>
+      <div id="trace" class="trace"></div>
+    </section>
+  </main>
+
+  <script src="/robot.js"></script>
+</body>
+</html>

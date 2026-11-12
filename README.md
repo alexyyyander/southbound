@@ -64,11 +64,12 @@
 | **LAN 设备图** | SQLite 持久化设备身份、能力、来源、控制范围与缓存状态；合并 inventory / deep scan / commissioning / access binding |
 | **共享 runtime** | 一个设备图、策略和审计供 Dashboard / MCP / CLI 共用；支持 `southbound mcp --remote` 与 Bearer token |
 | **多硬件交互** | `/interaction`：会话、模态路由、跨端输出与 handoff；端点注册通过 HTTP API；Mac/手机/Pi/ESP32/TV 模拟端点 |
+| **机械臂阅读角** | `/robot`：三条虚拟臂（灯臂、显示臂、夹爪臂），阅读/专注/按咖啡机/急停/复位场景；动作经过 AccessHub |
 | **2.5D 房间实验** | `GET /scene`：可移动 avatar、presence 信号、点击设备、自动反射与回读验证 |
 | **Splat 预览** | `/scene` 内切换 WebGL 合成 splat：轨道旋转、设备热点、avatar 投影；同一控制层 |
 | **可视化** | 网络拓扑、设备清单、模拟端点、Agent 控制台、接入表单 |
 | **MCP** | 31 个工具：发现、深扫、LAN 图、交互端点、skills、observations、missions、视觉、模拟器、接入层、受控 onboarding |
-| **无硬件闭环** | 六个虚拟端点 + 确定性 agent trace，没有设备也能跑 |
+| **无硬件闭环** | 六个虚拟端点 + 三条机械臂 + 确定性 agent trace，没有设备也能跑 |
 
 BLE / NFC 的配置、事件入口与无硬件演示见 [硬件适配器说明](docs/HARDWARE_ADAPTERS.md)。
 
@@ -360,6 +361,7 @@ SOUTHBOUND_REMOTE_URL=http://127.0.0.1:8765 python3 -m southbound.mcp_server
 - `GET /api/interaction/endpoints`、`GET /api/interaction/sessions`
 - `POST /api/interaction/endpoints`、`POST /api/interaction/heartbeat`
 - `POST /api/interaction/input`、`POST /api/interaction/handoff`
+- `GET /api/robot/state`、`POST /api/robot/scene`
 - `GET /api/inventory`、`GET /api/deep_scan`、`GET /api/sim/devices`
 - `GET /api/scene/state`、`POST /api/scene/presence`、`POST /api/scene/automation`、`POST /api/scene/reset`
 - `POST /api/sim/devices/<id>/action`、`POST /api/sim/reset`
@@ -393,6 +395,7 @@ southbound/
 │   ├── graph.py             # 持久化 LAN 设备图
 │   ├── event_store.py       # 持久事件日志
 │   ├── interaction.py       # 多硬件端点、会话与模态路由
+│   ├── robot.py             # 三条虚拟机械臂与阅读角场景
 │   ├── scene.py             # 2.5D presence、低风险反射与验证
 │   ├── skills.py            # SkillRegistry / SkillRunner / manifest 校验
 │   ├── observations.py      # event → observation / situation
@@ -421,13 +424,13 @@ southbound/
 │   │       ├── camera.py
 │   │       ├── home_assistant.py
 │   │       └── mqtt.py
-│   └── web/                 # 观测站面板 + scene.html / interaction.html / splat.js
+│   └── web/                 # 观测站面板 + scene.html / interaction.html / robot.html / splat.js
 ├── assets/                  # Logo、社交预览与品牌说明
 ├── config/access.example.json
 ├── deploy/systemd/          # Pi 常驻 harness 示例
 ├── docs/                    # About、架构、协议、演示、harness、接入层、onboarding、vision、芯片、信号、硬件、扫描
 ├── skills/                  # 版本化 edge skill manifests
-├── tests/                   # 168 项 unittest
+├── tests/                   # 174 项 unittest
 ├── data/                    # 本地生成，gitignored
 ├── viz_server.py            # 面板兼容入口
 ├── mcp_server.py            # MCP 兼容入口
@@ -454,7 +457,7 @@ make lint     # ruff check .
 make build    # wheel + sdist
 ```
 
-当前 168 项标准库测试覆盖分级规则、模拟器、agent 目标拆分、能力校验、策略、审计、工具目录、运行时/事件总线、持久化 LAN 图与事件日志、多硬件交互端点/会话/路由、远程 runtime client/token、受控接入与持久化、2.5D 场景 presence/自动验证、survey 解析/readiness、skill manifest 校验/trigger/shadow/verify、HA 适配器映射、MQTT payload 和 CLI 解析、摄像头快照/运动检测/observation 投影/隐私策略，以及适配器注册、BLE/NFC 模拟读写、设备事件、驱动边界和资源释放。
+当前 174 项标准库测试覆盖分级规则、模拟器、agent 目标拆分、能力校验、策略、审计、工具目录、运行时/事件总线、持久化 LAN 图与事件日志、多硬件交互端点/会话/路由、机械臂场景与急停、远程 runtime client/token、受控接入与持久化、2.5D 场景 presence/自动验证、survey 解析/readiness、skill manifest 校验/trigger/shadow/verify、HA 适配器映射、MQTT payload 和 CLI 解析、摄像头快照/运动检测/observation 投影/隐私策略，以及适配器注册、BLE/NFC 模拟读写、设备事件、驱动边界和资源释放。
 
 CI 在 Python 3.10–3.13 上跑 ruff、单元测试和 wheel/sdist 构建。
 
@@ -474,6 +477,7 @@ CI 在 Python 3.10–3.13 上跑 ruff、单元测试和 wheel/sdist 构建。
 - [Missions](docs/MISSIONS.md) — proposed/approved/running/verified 状态机、审批与回读
 - [共享 Runtime Service](docs/RUNTIME_SERVICE.md) — 一个设备图供 Dashboard / MCP / CLI 共用
 - [多硬件交互](docs/INTERACTION.md) — 端点、会话、模态路由与跨端 handoff
+- [机械臂阅读角](docs/ROBOT.md) — 三条虚拟臂、场景编排、安全边界与真实机械臂路线
 - [架构拆解图](docs/ARCHITECTURE_BREAKDOWN.md) — harness / MCP / core / adapters / devices 分层
 - [接入工具层](docs/ACCESS_LAYER.md)
 - [受控设备接入](docs/ONBOARDING.md)
@@ -490,7 +494,7 @@ CI 在 Python 3.10–3.13 上跑 ruff、单元测试和 wheel/sdist 构建。
 
 - LAN 发现、深扫、T0–T3 分级；
 - AccessHub 策略/审计/能力目录；
-- 七类 adapter、六个虚拟端点；BLE/NFC 尚待真实硬件验收；
+- 八类 adapter（含 camera/arm 模拟）、六个虚拟端点；BLE/NFC 尚待真实硬件验收；
 - Camera adapter：synthetic/file/USB/RTSP 快照，`policy.allow_camera` 独立隐私门；
 - 视觉感知：纯本地运动检测、`vision.*` observation、本地证据保留、MCP/HTTP/面板接入；
 - SouthboundRuntime + EventBus + SSE + 面板 flowbar；
@@ -499,6 +503,7 @@ CI 在 Python 3.10–3.13 上跑 ruff、单元测试和 wheel/sdist 构建。
 - 持久事件日志：事件 id 跨重启，`/api/events/recent` 可重放；
 - Home Assistant WebSocket 状态事件：可选 `websocket-client`，事件进入同一 EventBus；
 - 多硬件交互面：端点注册、会话、模态路由、跨端 handoff、`/interaction` 面板；
+- 机械臂阅读角：灯臂/显示臂/夹爪臂、阅读/专注/按咖啡机/急停/复位、`/robot` 面板；
 - Skill runtime：6 个 manifest、trigger/guard、shadow/proposed、AccessHub 执行、verify/fallback、4 个 MCP 工具；
 - Observation runtime：事件→结构化 observation、situation snapshot、2 个 MCP 工具；
 - Mission runtime：proposed/approved/running/verified 状态机、审批、动作执行与回读、4 个 MCP 工具；
@@ -509,7 +514,7 @@ CI 在 Python 3.10–3.13 上跑 ruff、单元测试和 wheel/sdist 构建。
 - WebGL 合成 splat 预览：轨道相机、设备热点、avatar 投影；
 - 无主机 `survey`：Wi-Fi/BLE/radio 证据、服务指纹、Pi/Linux 支持、readiness 报告；
 - 31 个 MCP 工具；
-- 168 项测试、CI、wheel/sdist。
+- 174 项测试、CI、wheel/sdist。
 
 **下一步**
 
@@ -518,6 +523,7 @@ CI 在 Python 3.10–3.13 上跑 ruff、单元测试和 wheel/sdist 构建。
 - 真实交互端点：Pi/ESP32/手机客户端、音频流、离线降级与跨端 handoff；
 - Matter 原生 controller、ESPHome 原生 API；
 - 真实 ESP32/Matter/Zigbee/BLE/NFC 硬件验证；
+- 真实机械臂：ROS2/MoveIt2、力控、工作空间限制、急停与真实末端工具；
 - 视觉下一阶段：真实 RTSP/USB 摄像头验收、ONNX/Frigate 检测器、模型注册表与本地 VLM 描述；
 - **异步 Mission worker**：长时盯守、巡逻、录像任务需要持久队列、租约、取消与重试；
 - **真实 3DGS 视觉层（可选）**：当前已有合成 splat 预览；真实照片级效果需要采集视频、COLMAP + nerfstudio/gsplat 训练，再把 `.splat` 资产接入同一 WebGL 层。2.5D 地图仍是设备锚点、碰撞、策略与审计的权威层；大文件放 `data/` 或 Git LFS，不提交真实家庭影像。

@@ -113,6 +113,26 @@ class AccessHub:
                 bindings[binding.device_id] = binding
         self._bindings = bindings
 
+    def add_adapter(self, adapter: DeviceAdapter) -> list[dict[str, Any]]:
+        """Attach a local adapter, e.g. the simulated robot-arm driver."""
+        with self._event_lock:
+            if adapter.name in self.adapters:
+                raise AccessError(f"重复的 adapter 名称：{adapter.name}")
+            self.adapters[adapter.name] = adapter
+            adapter.set_event_sink(
+                lambda device_id, event_type, data, name=adapter.name: self._device_event(
+                    name, device_id, event_type, data
+                )
+            )
+            registered = []
+            for binding in adapter.bindings():
+                if binding.device_id in self._bindings:
+                    raise AccessError(f"device_id 已存在：{binding.device_id}")
+                binding.adapter = adapter.name
+                self._bindings[binding.device_id] = binding
+                registered.append(binding.snapshot())
+            return registered
+
     def register_binding(
         self, binding: DeviceBinding, adapter_name: str | None = None
     ) -> dict[str, Any]:

@@ -393,7 +393,7 @@ class MyAdapter(DeviceAdapter):
 - 能力目录与 JSON Schema 参数校验；
 - 策略引擎与高风险硬门；
 - 审计日志；
-- 模拟器、Home Assistant、MQTT、Zigbee2MQTT、BLE、NFC、Camera 七类 adapter；BLE/NFC/摄像头已完成模拟与库边界测试，待真实硬件验收，见 [硬件适配器](HARDWARE_ADAPTERS.md) 与 [视觉感知](VISION.md)；
+- 模拟器、Home Assistant、MQTT、Zigbee2MQTT、BLE、NFC、Camera、arm 八类 adapter；BLE/NFC/摄像头/机械臂已完成模拟与库边界测试，待真实硬件验收，见 [硬件适配器](HARDWARE_ADAPTERS.md)、[视觉感知](VISION.md) 与 [机械臂阅读角](ROBOT.md)；
 - MCP、CLI、HTTP 三种入口；
 - SouthboundRuntime、EventBus、SSE 事件流与面板 flowbar；
 - 设备侧事件订阅：MQTT state、HA WebSocket `state_changed`、BLE 通知和 NFC 刷卡事件均已进入统一事件路径；

@@ -36,9 +36,11 @@ from urllib.parse import parse_qs, unquote, urlparse
 from .access.commissioning import CommissionStore
 from .access.config import load_config
 from .access.errors import AccessError
+from .access.adapters.arm import RobotArmAdapter
 from .event_store import EventStore
 from .graph import LANGraph
 from .interaction import InteractionService, InteractionStore
+from .robot import RobotSceneController
 from .missions import (
     MissionDenied,
     MissionError,
@@ -85,6 +87,10 @@ RUNTIME = SouthboundRuntime(
 )
 SIM = RUNTIME.simulator
 HUB = RUNTIME.hub
+ARM = RobotArmAdapter()
+HUB.add_adapter(ARM)
+RUNTIME.sync_graph()
+ROBOT = RobotSceneController(RUNTIME, ARM)
 SCENE = SceneController(RUNTIME)
 SKILLS = SkillRegistry.from_directory(SKILLS_DIR)
 SKILL_RUNNER = SkillRunner(RUNTIME, SKILLS, mode="shadow")
@@ -159,7 +165,7 @@ class Handler(BaseHTTPRequestHandler):
         )
 
     def _interaction_post_allowed(self, path: str) -> bool:
-        if not path.startswith("/api/interaction/"):
+        if not path.startswith(("/api/interaction/", "/api/robot/")):
             return True
         content_type = (
             self.headers.get("Content-Type", "").split(";")[0].strip().lower()
@@ -242,6 +248,9 @@ class Handler(BaseHTTPRequestHandler):
             return
         if path == "/api/scene/state":
             self._json(SCENE.snapshot())
+            return
+        if path == "/api/robot/state":
+            self._json(ROBOT.snapshot())
             return
         if path == "/api/observations":
             query = parse_qs(parsed.query)
@@ -376,6 +385,9 @@ class Handler(BaseHTTPRequestHandler):
         if path in ("/interaction", "/interaction.html"):
             self._static("/interaction.html")
             return
+        if path in ("/robot", "/robot.html"):
+            self._static("/robot.html")
+            return
         if path in ("/api/access/status", "/api/northbound/status"):
             self._json(RUNTIME.status())
             return
@@ -495,6 +507,12 @@ class Handler(BaseHTTPRequestHandler):
             return
         if path == "/api/scene/reset":
             self._json(SCENE.reset())
+            return
+        if path == "/api/robot/scene":
+            try:
+                self._json(ROBOT.run(str(body.get("scene", ""))))
+            except ValueError as exc:
+                self._json({"ok": False, "error": str(exc)}, status=400)
             return
         if path == "/api/missions":
             try:
